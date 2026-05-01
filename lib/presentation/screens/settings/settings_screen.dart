@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../core/constants/constants.dart';
-import '../../../core/di/injection.dart';
 import '../../blocs/settings/settings_bloc.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -9,8 +8,6 @@ class SettingsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return Scaffold(
       body: SafeArea(
         child: BlocBuilder<SettingsBloc, SettingsState>(
@@ -53,16 +50,9 @@ class SettingsScreen extends StatelessWidget {
       child: Row(
         children: [
           Text(
-            '設定',
+            'Settings',
             style: theme.textTheme.titleLarge?.copyWith(
               fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(width: AppSpacing.space2),
-          Text(
-            'Settings',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
             ),
           ),
         ],
@@ -80,8 +70,8 @@ class SettingsScreen extends StatelessWidget {
         children: [
           _buildSectionHeader(
             context,
-            title: 'アクセシビリティ',
-            subtitle: 'Accessibility',
+            title: 'Accessibility',
+            subtitle: 'Display & Text',
             icon: Icons.accessibility_new,
           ),
           const SizedBox(height: AppSpacing.space3),
@@ -98,14 +88,13 @@ class SettingsScreen extends StatelessWidget {
                 _buildSettingsTile(
                   context,
                   icon: Icons.dark_mode,
-                  title: 'ダークモード',
-                  subtitle: 'Dark Mode',
+                  title: 'Dark Mode',
                   trailing: Switch(
                     value: state.isDarkMode,
                     onChanged: (_) {
                       context.read<SettingsBloc>().add(const ToggleDarkMode());
                     },
-                    activeColor: theme.colorScheme.primary,
+                    activeThumbColor: theme.colorScheme.primary,
                   ),
                 ),
                 Divider(
@@ -115,7 +104,7 @@ class SettingsScreen extends StatelessWidget {
                 _buildSettingsTile(
                   context,
                   icon: Icons.text_fields,
-                  title: '文字サイズ',
+                  title: 'Text Size',
                   subtitle: 'Font Size: ${state.textSizeScale.label}',
                   onTap: () => _showTextSizeSelector(context, state),
                 ),
@@ -126,7 +115,7 @@ class SettingsScreen extends StatelessWidget {
                 _buildSettingsTile(
                   context,
                   icon: Icons.format_size,
-                  title: '文字の太さ',
+                  title: 'Font Weight',
                   subtitle: 'Font Weight: ${_getFontWeightLabel(state.fontWeightScale)}',
                   onTap: () => _showFontWeightSelector(context, state),
                 ),
@@ -137,7 +126,7 @@ class SettingsScreen extends StatelessWidget {
                 _buildSettingsTile(
                   context,
                   icon: Icons.palette_outlined,
-                  title: '色覚特性',
+                  title: 'Colour Vision',
                   subtitle: 'Colour Vision: ${state.colourVisionMode.label}',
                   onTap: () => _showColourVisionSelector(context, state),
                 ),
@@ -148,7 +137,7 @@ class SettingsScreen extends StatelessWidget {
                 _buildSettingsTile(
                   context,
                   icon: Icons.contrast,
-                  title: 'コントラスト',
+                  title: 'Contrast',
                   subtitle: 'Contrast: ${state.contrastMode.label}',
                   onTap: () => _showContrastSelector(context, state),
                 ),
@@ -170,8 +159,8 @@ class SettingsScreen extends StatelessWidget {
         children: [
           _buildSectionHeader(
             context,
-            title: '通知設定',
-            subtitle: 'Notifications',
+            title: 'Notifications',
+            subtitle: 'Alert Settings',
             icon: Icons.notifications_outlined,
           ),
           const SizedBox(height: AppSpacing.space3),
@@ -187,8 +176,8 @@ class SettingsScreen extends StatelessWidget {
               children: [
                 _buildNotificationToggle(
                   context,
-                  title: '重大アラート',
-                  subtitle: 'Critical Alerts',
+                  title: 'Critical Alerts',
+                  subtitle: 'Emergency Warnings',
                   value: true,
                   onChanged: (_) {},
                 ),
@@ -198,8 +187,8 @@ class SettingsScreen extends StatelessWidget {
                 ),
                 _buildNotificationToggle(
                   context,
-                  title: '地震的通知',
-                  subtitle: 'Earthquake Alerts',
+                  title: 'Earthquake Alerts',
+                  subtitle: 'Seismic Activity',
                   value: true,
                   onChanged: (_) {},
                 ),
@@ -209,8 +198,8 @@ class SettingsScreen extends StatelessWidget {
                 ),
                 _buildNotificationToggle(
                   context,
-                  title: ' tsunami 注意報',
-                  subtitle: 'Tsunami Alerts',
+                  title: 'Tsunami Alerts',
+                  subtitle: 'Ocean Warning',
                   value: true,
                   onChanged: (_) {},
                 ),
@@ -220,8 +209,8 @@ class SettingsScreen extends StatelessWidget {
                 ),
                 _buildNotificationToggle(
                   context,
-                  title: '気象警報',
-                  subtitle: 'Weather Warnings',
+                  title: 'Weather Warnings',
+                  subtitle: 'Severe Weather',
                   value: true,
                   onChanged: (_) {},
                 ),
@@ -231,8 +220,8 @@ class SettingsScreen extends StatelessWidget {
                 ),
                 _buildNotificationToggle(
                   context,
-                  title: 'Jアラート',
-                  subtitle: 'J-Alert',
+                  title: 'J-Alert',
+                  subtitle: 'National Warning',
                   value: true,
                   onChanged: (_) {},
                 ),
@@ -254,8 +243,8 @@ class SettingsScreen extends StatelessWidget {
         children: [
           _buildSectionHeader(
             context,
-            title: 'アプリについて',
-            subtitle: 'About',
+            title: 'About',
+            subtitle: 'App Information',
             icon: Icons.info_outline,
           ),
           const SizedBox(height: AppSpacing.space3),
@@ -272,8 +261,7 @@ class SettingsScreen extends StatelessWidget {
                 _buildSettingsTile(
                   context,
                   icon: Icons.help_outline,
-                  title: 'NERVについて',
-                  subtitle: 'About NERV',
+                  title: 'About NERV',
                   onTap: () => _showAboutDialog(context),
                 ),
                 Divider(
@@ -283,8 +271,7 @@ class SettingsScreen extends StatelessWidget {
                 _buildSettingsTile(
                   context,
                   icon: Icons.privacy_tip_outlined,
-                  title: 'プライバシー policy',
-                  subtitle: 'Privacy Policy',
+                  title: 'Privacy Policy',
                   onTap: () {},
                 ),
                 Divider(
@@ -294,8 +281,7 @@ class SettingsScreen extends StatelessWidget {
                 _buildSettingsTile(
                   context,
                   icon: Icons.description_outlined,
-                  title: '利用規約',
-                  subtitle: 'Terms of Service',
+                  title: 'Terms of Service',
                   onTap: () {},
                 ),
               ],
@@ -500,7 +486,7 @@ class SettingsScreen extends StatelessWidget {
           Switch(
             value: value,
             onChanged: onChanged,
-            activeColor: theme.colorScheme.primary,
+            activeThumbColor: theme.colorScheme.primary,
           ),
         ],
       ),
@@ -521,8 +507,7 @@ class SettingsScreen extends StatelessWidget {
   void _showTextSizeSelector(BuildContext context, SettingsState state) {
     _showSelectorSheet(
       context,
-      title: '文字サイズ',
-      titleEn: 'Font Size',
+      title: 'Text Size',
       options: TextSizeScale.values,
       currentValue: state.textSizeScale,
       labelBuilder: (scale) => scale.label,
@@ -535,8 +520,7 @@ class SettingsScreen extends StatelessWidget {
   void _showFontWeightSelector(BuildContext context, SettingsState state) {
     _showSelectorSheet(
       context,
-      title: '文字の太さ',
-      titleEn: 'Font Weight',
+      title: 'Font Weight',
       options: FontWeightScale.values,
       currentValue: state.fontWeightScale,
       labelBuilder: (scale) => _getFontWeightLabel(scale),
@@ -549,8 +533,7 @@ class SettingsScreen extends StatelessWidget {
   void _showColourVisionSelector(BuildContext context, SettingsState state) {
     _showSelectorSheet(
       context,
-      title: '色覚特性',
-      titleEn: 'Colour Vision',
+      title: 'Colour Vision',
       options: ColourVisionMode.values,
       currentValue: state.colourVisionMode,
       labelBuilder: (mode) => mode.label,
@@ -563,8 +546,7 @@ class SettingsScreen extends StatelessWidget {
   void _showContrastSelector(BuildContext context, SettingsState state) {
     _showSelectorSheet(
       context,
-      title: 'コントラスト',
-      titleEn: 'Contrast',
+      title: 'Contrast',
       options: ContrastMode.values,
       currentValue: state.contrastMode,
       labelBuilder: (mode) => mode.label,
@@ -577,7 +559,6 @@ class SettingsScreen extends StatelessWidget {
   void _showSelectorSheet<T>(
     BuildContext context, {
     required String title,
-    required String titleEn,
     required List<T> options,
     required T currentValue,
     required String Function(T) labelBuilder,
@@ -610,12 +591,6 @@ class SettingsScreen extends StatelessWidget {
                         title,
                         style: theme.textTheme.titleLarge?.copyWith(
                           fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      Text(
-                        titleEn,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
                         ),
                       ),
                     ],
@@ -711,12 +686,12 @@ class SettingsScreen extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'バージョン / Version 1.0.0',
+                'Version 1.0.0',
                 style: theme.textTheme.bodyMedium,
               ),
               const SizedBox(height: AppSpacing.space4),
               Text(
-                'NERV防災アプリは、地震・ tsunami ・噴火・特別警報の速報や洪水や土砂災害といった防災気象情報を、利用者の現在地や登録地点に基づき最適化して配信するスマートフォン用アプリです。',
+                'NERV Disaster Prevention App delivers real-time alerts for earthquakes, tsunamis, volcanic eruptions, and special warnings. Weather and hazard information is optimized based on your current location or registered locations.',
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
                 ),
@@ -734,7 +709,7 @@ class SettingsScreen extends StatelessWidget {
             TextButton(
               onPressed: () => Navigator.pop(context),
               child: Text(
-                '閉じる / Close',
+                'Close',
                 style: TextStyle(color: theme.colorScheme.primary),
               ),
             ),

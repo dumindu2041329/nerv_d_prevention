@@ -40,7 +40,7 @@ class ForecastCard extends StatelessWidget {
                   ),
                   const SizedBox(width: AppSpacing.space2),
                   Text(
-                    '予報 / Forecast',
+                    'Forecast',
                     style: theme.textTheme.bodyMedium?.copyWith(
                       fontWeight: FontWeight.w600,
                     ),
@@ -68,7 +68,7 @@ class ForecastCard extends StatelessWidget {
           SizedBox(
             width: 44,
             child: Text(
-              isToday ? '今日' : DateTimeUtils.formatDayOfWeekShort(day.time),
+              isToday ? 'Today' : DateTimeUtils.formatDayOfWeekShort(day.time),
               style: theme.textTheme.bodySmall?.copyWith(
                 fontWeight: isToday ? FontWeight.w700 : FontWeight.w400,
                 color: isToday

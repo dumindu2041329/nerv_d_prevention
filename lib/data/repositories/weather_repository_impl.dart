@@ -4,6 +4,8 @@ import '../../../domain/entities/location.dart';
 import '../../../domain/repositories/weather_repository.dart';
 import '../remote/open_meteo/open_meteo_client.dart';
 import '../local/hive/hive_service.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:geocoding/geocoding.dart' as geocoding;
 
 class WeatherRepositoryImpl implements WeatherRepository {
   final OpenMeteoClient _client;
@@ -42,7 +44,65 @@ class WeatherRepositoryImpl implements WeatherRepository {
 
   @override
   Future<Location?> getLocationFromGps() async {
-    return null;
+    bool serviceEnabled;
+    LocationPermission permission;
+
+    // Test if location services are enabled.
+    serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      return null;
+    }
+
+    permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) {
+        return null;
+      }
+    }
+
+    if (permission == LocationPermission.deniedForever) {
+      return null;
+    }
+
+    try {
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.medium,
+        ),
+      );
+
+      String name = 'Current Location';
+      String? country;
+      String? admin1;
+
+      try {
+        final placemarks = await geocoding.placemarkFromCoordinates(
+          position.latitude,
+          position.longitude,
+        );
+        if (placemarks.isNotEmpty) {
+          final place = placemarks.first;
+          name = place.locality ?? place.subAdministrativeArea ?? place.name ?? 'Current Location';
+          country = place.country;
+          admin1 = place.administrativeArea;
+        }
+      } catch (e) {
+        // Fallback to coordinates or default string if reverse geocoding fails
+      }
+
+      return Location(
+        id: 'gps',
+        name: name,
+        country: country,
+        admin1: admin1,
+        latitude: position.latitude,
+        longitude: position.longitude,
+        isGps: true,
+      );
+    } catch (e) {
+      return null;
+    }
   }
 
   @override

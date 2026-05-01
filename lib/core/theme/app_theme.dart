@@ -6,7 +6,6 @@ class AppTheme {
   static const Color _colorBgPrimaryDark = Color(0xFF0A0C10);
   static const Color _colorBgSurfaceDark = Color(0xFF12151C);
   static const Color _colorBgElevatedDark = Color(0xFF1A1E29);
-  static const Color _colorBgOverlayDark = Color(0xFF232836);
   static const Color _colorBorderDefault = Color(0xFF2A2F3E);
   static const Color _colorBorderSubtle = Color(0xFF1E2230);
   static const Color _colorAccentPrimary = Color(0xFFFF6B00);
@@ -17,7 +16,6 @@ class AppTheme {
 
   static const Color _colorBgPrimaryLight = Color(0xFFF4F6FA);
   static const Color _colorBgSurfaceLight = Color(0xFFFFFFFF);
-  static const Color _colorBgElevatedLight = Color(0xFFEEF0F6);
   static const Color _colorBorderDefaultLight = Color(0xFFD0D5E8);
   static const Color _colorTextPrimaryLight = Color(0xFF0F1120);
   static const Color _colorTextSecondaryLight = Color(0xFF5A6280);

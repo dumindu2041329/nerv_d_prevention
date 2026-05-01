@@ -1,17 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../../../core/constants/constants.dart';
-import '../../../domain/entities/weather_data.dart';
-import '../../../core/utils/string_utils.dart';
-import '../../../core/utils/date_time_utils.dart';
 
 class WeatherDetailScreen extends StatelessWidget {
   const WeatherDetailScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('Weather Details'),

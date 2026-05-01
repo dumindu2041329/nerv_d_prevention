@@ -9,11 +9,12 @@ abstract class WeatherEvent extends Equatable {
 
 class LoadWeather extends WeatherEvent {
   final Location? location;
+  final bool forceRefresh;
 
-  const LoadWeather({this.location});
+  const LoadWeather({this.location, this.forceRefresh = false});
 
   @override
-  List<Object?> get props => [location];
+  List<Object?> get props => [location, forceRefresh];
 }
 
 class RefreshWeather extends WeatherEvent {

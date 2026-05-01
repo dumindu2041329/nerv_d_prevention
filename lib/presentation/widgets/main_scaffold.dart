@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import '../../core/constants/app_spacing.dart';
 import '../../core/constants/app_constants.dart';
 
 class MainScaffold extends StatefulWidget {
@@ -18,10 +17,10 @@ class _MainScaffoldState extends State<MainScaffold> {
   static const _routes = ['/home', '/map', '/timeline', '/settings'];
 
   static const _navItems = [
-    _NavItem(labelJa: 'ホーム', labelEn: 'Home', icon: Icons.home_outlined, selectedIcon: Icons.home),
-    _NavItem(labelJa: '地図', labelEn: 'Map', icon: Icons.map_outlined, selectedIcon: Icons.map),
-    _NavItem(labelJa: 'タイムライン', labelEn: 'Timeline', icon: Icons.timeline_outlined, selectedIcon: Icons.timeline),
-    _NavItem(labelJa: '設定', labelEn: 'Settings', icon: Icons.settings_outlined, selectedIcon: Icons.settings),
+    _NavItem(label: 'Home', icon: Icons.home_outlined, selectedIcon: Icons.home),
+    _NavItem(label: 'Map', icon: Icons.map_outlined, selectedIcon: Icons.map),
+    _NavItem(label: 'Timeline', icon: Icons.timeline_outlined, selectedIcon: Icons.timeline),
+    _NavItem(label: 'Settings', icon: Icons.settings_outlined, selectedIcon: Icons.settings),
   ];
 
   void _onItemTapped(int index) {
@@ -63,11 +62,10 @@ class _MainScaffoldState extends State<MainScaffold> {
           height: AppConstants.bottomNavHeight + MediaQuery.of(context).padding.bottom,
           labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
           destinations: _navItems.map((item) {
-            final isSelected = _currentIndex == _navItems.indexOf(item);
             return NavigationDestination(
               icon: Icon(item.icon),
               selectedIcon: Icon(item.selectedIcon),
-              label: '${item.labelJa}\n${item.labelEn}',
+              label: item.label,
             );
           }).toList(),
         ),
@@ -77,14 +75,12 @@ class _MainScaffoldState extends State<MainScaffold> {
 }
 
 class _NavItem {
-  final String labelJa;
-  final String labelEn;
+  final String label;
   final IconData icon;
   final IconData selectedIcon;
 
   const _NavItem({
-    required this.labelJa,
-    required this.labelEn,
+    required this.label,
     required this.icon,
     required this.selectedIcon,
   });

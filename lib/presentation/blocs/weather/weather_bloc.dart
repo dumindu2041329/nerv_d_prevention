@@ -26,7 +26,12 @@ class WeatherBloc extends Bloc<WeatherEvent, WeatherState> {
     emit(WeatherLoading());
 
     try {
-      final location = event.location ?? const Location(
+      Location? targetLocation = event.location;
+      if (targetLocation == null || targetLocation.isGps) {
+        targetLocation = await _weatherRepository.getLocationFromGps();
+      }
+
+      final location = targetLocation ?? const Location(
         id: 'default',
         name: 'Colombo',
         country: 'Sri Lanka',
@@ -37,6 +42,7 @@ class WeatherBloc extends Bloc<WeatherEvent, WeatherState> {
       final weatherData = await _weatherRepository.getWeatherData(
         latitude: location.latitude,
         longitude: location.longitude,
+        forceRefresh: event.forceRefresh,
       );
 
       emit(WeatherLoaded(
@@ -90,22 +96,32 @@ class WeatherBloc extends Bloc<WeatherEvent, WeatherState> {
     SearchLocations event,
     Emitter<WeatherState> emit,
   ) async {
-    if (event.query.length < 2) return;
+    if (event.query.length < 2) {
+      if (state is WeatherLoaded) {
+        emit((state as WeatherLoaded)
+            .copyWith(searchResults: [], isSearching: false));
+      }
+      return;
+    }
+
+    if (state is WeatherLoaded) {
+      emit((state as WeatherLoaded).copyWith(isSearching: true));
+    }
 
     try {
       final locations = await _weatherRepository.searchLocations(event.query);
       final currentState = state;
 
       if (currentState is WeatherLoaded) {
-        emit(WeatherLoaded(
-          weatherData: currentState.weatherData,
-          location: currentState.location,
-          isStaleCache: currentState.isStaleCache,
+        emit(currentState.copyWith(
           searchResults: locations,
+          isSearching: false,
         ));
       }
     } catch (e) {
-      // Silently fail search
+      if (state is WeatherLoaded) {
+        emit((state as WeatherLoaded).copyWith(isSearching: false));
+      }
     }
   }
 
@@ -113,6 +129,6 @@ class WeatherBloc extends Bloc<WeatherEvent, WeatherState> {
     SelectLocation event,
     Emitter<WeatherState> emit,
   ) async {
-    add(LoadWeather(location: event.location));
+    add(LoadWeather(location: event.location, forceRefresh: true));
   }
 }

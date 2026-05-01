@@ -47,12 +47,12 @@ class HomeScreenContent extends StatelessWidget {
                     ),
                     const SizedBox(height: AppSpacing.space4),
                     Text(
-                      '情報の取得に失敗しました',
+                      'Failed to load information',
                       style: theme.textTheme.titleMedium,
                     ),
                     const SizedBox(height: AppSpacing.space2),
                     Text(
-                      'Failed to load weather',
+                      'Please check your connection and try again',
                       style: theme.textTheme.bodyMedium?.copyWith(
                         color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
                       ),
@@ -62,7 +62,7 @@ class HomeScreenContent extends StatelessWidget {
                       onPressed: () {
                         context.read<WeatherBloc>().add(const LoadWeather());
                       },
-                      child: const Text('再試行 / Retry'),
+                      child: const Text('Retry'),
                     ),
                   ],
                 ),
@@ -148,7 +148,7 @@ class HomeScreenContent extends StatelessWidget {
               ),
               const SizedBox(height: AppSpacing.space1),
               Text(
-                state.location?.displayName ?? '現在地 / Current Location',
+                state.location?.displayName ?? 'Current Location',
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
                 ),
@@ -157,6 +157,12 @@ class HomeScreenContent extends StatelessWidget {
           ),
           Row(
             children: [
+              LocationSearchWidget(
+                onLocationSelected: (location) {
+                  context.read<WeatherBloc>().add(SelectLocation(location: location));
+                },
+              ),
+              const SizedBox(width: AppSpacing.space2),
               _buildHeaderIconButton(
                 context,
                 icon: Icons.notifications_outlined,
@@ -238,25 +244,19 @@ class HomeScreenContent extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '平穏 / All Clear',
+                  'All Clear',
                   style: theme.textTheme.titleSmall?.copyWith(
                     fontWeight: FontWeight.w600,
                     color: SeverityLevel.calm.color,
                   ),
                 ),
                 Text(
-                  'ただいまの警報・注意報はありません',
+                  'No active alerts or warnings',
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
                   ),
                 ),
               ],
-            ),
-          ),
-          Text(
-            'No active alerts',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
             ),
           ),
         ],
@@ -277,7 +277,7 @@ class HomeScreenContent extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            '発表中の警報・注意報',
+            'Active Alerts',
             style: Theme.of(context).textTheme.titleSmall?.copyWith(
                   fontWeight: FontWeight.w600,
                 ),
@@ -313,7 +313,7 @@ class HomeScreenContent extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '現在地',
+                    'Current Location',
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
                     ),
@@ -342,21 +342,21 @@ class HomeScreenContent extends StatelessWidget {
               _buildWeatherDetail(
                 context,
                 icon: Icons.water_drop_outlined,
-                label: '湿度',
+                label: 'Humidity',
                 value: '${weather.humidity}%',
               ),
               const SizedBox(width: AppSpacing.space6),
               _buildWeatherDetail(
                 context,
                 icon: Icons.air,
-                label: '風速',
+                label: 'Wind',
                 value: '${weather.windSpeed.round()} m/s',
               ),
               const SizedBox(width: AppSpacing.space6),
               _buildWeatherDetail(
                 context,
                 icon: Icons.visibility_outlined,
-                label: '視程',
+                label: 'Visibility',
                 value: '${weather.cloudCover.round()} km',
               ),
             ],
@@ -411,7 +411,7 @@ class HomeScreenContent extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'レーダー・Layers',
+            'Radar & Layers',
             style: Theme.of(context).textTheme.titleSmall?.copyWith(
                   fontWeight: FontWeight.w600,
                 ),
@@ -423,8 +423,8 @@ class HomeScreenContent extends StatelessWidget {
                 child: _buildQuickActionButton(
                   context,
                   icon: Icons.radar,
-                  title: '雨雲レーダー',
-                  subtitle: 'Rain Radar',
+                  title: 'Rain Radar',
+                  subtitle: 'Precipitation',
                   color: Colors.blue,
                   onTap: () => context.go('/map'),
                 ),
@@ -434,8 +434,8 @@ class HomeScreenContent extends StatelessWidget {
                 child: _buildQuickActionButton(
                   context,
                   icon: Icons.public,
-                  title: '台風',
-                  subtitle: 'Typhoon',
+                  title: 'Typhoon',
+                  subtitle: 'Tropical Cyclone',
                   color: Colors.cyan,
                   onTap: () {},
                 ),
@@ -449,8 +449,8 @@ class HomeScreenContent extends StatelessWidget {
                 child: _buildQuickActionButton(
                   context,
                   icon: Icons.tsunami,
-                  title: '潮位・波浪',
-                  subtitle: 'Tsunami/Wave',
+                  title: 'Tsunami/Wave',
+                  subtitle: 'Ocean Warning',
                   color: Colors.teal,
                   onTap: () {},
                 ),
@@ -460,8 +460,8 @@ class HomeScreenContent extends StatelessWidget {
                 child: _buildQuickActionButton(
                   context,
                   icon: Icons.landscape,
-                  title: '火山の噴火',
-                  subtitle: 'Volcano',
+                  title: 'Volcano',
+                  subtitle: 'Eruption Alert',
                   color: Colors.deepOrange,
                   onTap: () {},
                 ),
@@ -552,22 +552,11 @@ class HomeScreenContent extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                '週間予報',
-                style: theme.textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              Text(
-                '7-Day Forecast',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
-                ),
-              ),
-            ],
+          Text(
+            '7-Day Forecast',
+            style: theme.textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
           ),
           const SizedBox(height: AppSpacing.space3),
           ForecastCard(dailyForecast: state.weatherData.daily),

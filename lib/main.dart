@@ -4,7 +4,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'core/di/injection.dart';
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
-import 'core/constants/app_colors.dart';
 import 'presentation/blocs/settings/settings_bloc.dart';
 
 void main() async {

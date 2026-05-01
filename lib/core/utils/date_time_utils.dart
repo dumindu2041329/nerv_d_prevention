@@ -22,7 +22,7 @@ class DateTimeUtils {
   }
 
   static String formatDayOfWeekShort(DateTime dateTime) {
-    final weekdays = ['日', '月', '火', '水', '木', '金', '土'];
+    final weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     return weekdays[dateTime.weekday % 7];
   }
 
