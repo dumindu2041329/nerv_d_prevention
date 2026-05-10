@@ -17,4 +17,8 @@ abstract class WeatherRepository {
   Future<WeatherData?> getCachedWeatherData();
 
   Future<bool> isCacheValid();
+
+  Location? getCachedLocation();
+
+  Future<void> cacheLocation(Location location);
 }

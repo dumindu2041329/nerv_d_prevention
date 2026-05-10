@@ -38,3 +38,16 @@ class SelectLocation extends WeatherEvent {
   @override
   List<Object?> get props => [location];
 }
+
+class _FetchWeatherInBackground extends WeatherEvent {
+  final Location location;
+  final bool forceRefresh;
+
+  const _FetchWeatherInBackground({
+    required this.location,
+    this.forceRefresh = false,
+  });
+
+  @override
+  List<Object?> get props => [location, forceRefresh];
+}

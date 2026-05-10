@@ -33,6 +33,9 @@ migrate_working_dir/
 /build/
 /coverage/
 
+# Environment variables (contains API keys)
+/backend/.env
+
 # Symbolication related
 app.*.symbols
 

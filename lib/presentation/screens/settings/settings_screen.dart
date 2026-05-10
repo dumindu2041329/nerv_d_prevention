@@ -332,7 +332,7 @@ class SettingsScreen extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.space2),
           Text(
-            'Weather data: Open-Meteo.com (CC BY 4.0)',
+            'Weather data: AccuWeather',
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
               fontSize: 10,
@@ -602,7 +602,11 @@ class SettingsScreen extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: AppSpacing.space4),
-              ...options.map((option) {
+              Flexible(
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: options.map((option) {
                 final isSelected = option == currentValue;
                 return Material(
                   color: isSelected
@@ -641,7 +645,10 @@ class SettingsScreen extends StatelessWidget {
                     ),
                   ),
                 );
-              }),
+              }).toList(),
+                  ),
+                ),
+              ),
               SizedBox(height: MediaQuery.of(context).padding.bottom),
             ],
           ),
@@ -698,7 +705,7 @@ class SettingsScreen extends StatelessWidget {
               ),
               const SizedBox(height: AppSpacing.space4),
               Text(
-                'Weather data provided by Open-Meteo under CC BY 4.0 licence.',
+                'Weather data provided by AccuWeather.',
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
                 ),

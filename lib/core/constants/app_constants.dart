@@ -1,20 +1,13 @@
 import 'package:flutter/material.dart';
 
 class ApiConstants {
-  static const String openMeteoBaseUrl = 'https://api.open-meteo.com/v1';
-  static const String geocodingBaseUrl = 'https://geocoding-api.open-meteo.com/v1';
-  static const String airQualityBaseUrl = 'https://air-quality-api.open-meteo.com/v1';
-  static const String floodBaseUrl = 'https://flood-api.open-meteo.com/v1';
-  static const String archiveBaseUrl = 'https://archive-api.open-meteo.com/v1';
+  static const String backendBaseUrl = 'http://localhost:8080';
 
   static const Duration currentWeatherCacheTtl = Duration(minutes: 10);
   static const Duration hourlyForecastCacheTtl = Duration(hours: 1);
   static const Duration dailyForecastCacheTtl = Duration(hours: 3);
-  static const Duration airQualityCacheTtl = Duration(hours: 1);
-  static const Duration floodDataCacheTtl = Duration(hours: 6);
-  static const Duration geocodingCacheTtl = Duration(days: 7);
 
-  static const int maxApiCallsPerDay = 10000;
+  static const int maxApiCallsPerDay = 50;
 }
 
 class AppConstants {

@@ -14,6 +14,7 @@ class WeatherBloc extends Bloc<WeatherEvent, WeatherState> {
       : _weatherRepository = weatherRepository,
         super(WeatherInitial()) {
     on<LoadWeather>(_onLoadWeather);
+    on<_FetchWeatherInBackground>(_onFetchWeatherInBackground);
     on<RefreshWeather>(_onRefreshWeather);
     on<SearchLocations>(_onSearchLocations);
     on<SelectLocation>(_onSelectLocation);
@@ -23,21 +24,61 @@ class WeatherBloc extends Bloc<WeatherEvent, WeatherState> {
     LoadWeather event,
     Emitter<WeatherState> emit,
   ) async {
-    emit(WeatherLoading());
+    Location? targetLocation = event.location;
 
-    try {
-      Location? targetLocation = event.location;
+    if (targetLocation == null || targetLocation.isGps) {
+      final cachedLocation = _weatherRepository.getCachedLocation();
+      if (cachedLocation != null) {
+        targetLocation = cachedLocation;
+      }
+    }
+
+    final location = targetLocation ?? const Location(
+      id: 'default',
+      name: 'Colombo',
+      country: 'Sri Lanka',
+      latitude: 6.9271,
+      longitude: 79.8612,
+    );
+
+    final cached = await _weatherRepository.getCachedWeatherData();
+    if (cached != null) {
+      emit(WeatherLoaded(
+        weatherData: cached,
+        location: location,
+        isStaleCache: true,
+      ));
+
+      add(_FetchWeatherInBackground(location: location, forceRefresh: event.forceRefresh));
+    } else {
+      emit(WeatherLoading());
       if (targetLocation == null || targetLocation.isGps) {
         targetLocation = await _weatherRepository.getLocationFromGps();
+        final finalLocation = targetLocation ?? location;
+        if (targetLocation != null) {
+          await _weatherRepository.cacheLocation(targetLocation);
+        }
+        add(_FetchWeatherInBackground(location: finalLocation, forceRefresh: event.forceRefresh));
+      } else {
+        add(_FetchWeatherInBackground(location: location, forceRefresh: event.forceRefresh));
       }
+    }
+  }
 
-      final location = targetLocation ?? const Location(
-        id: 'default',
-        name: 'Colombo',
-        country: 'Sri Lanka',
-        latitude: 6.9271,
-        longitude: 79.8612,
-      );
+  Future<void> _onFetchWeatherInBackground(
+    _FetchWeatherInBackground event,
+    Emitter<WeatherState> emit,
+  ) async {
+    try {
+      Location location = event.location;
+
+      if (location.isGps) {
+        final gpsLocation = await _weatherRepository.getLocationFromGps();
+        if (gpsLocation != null) {
+          location = gpsLocation;
+          await _weatherRepository.cacheLocation(gpsLocation);
+        }
+      }
 
       final weatherData = await _weatherRepository.getWeatherData(
         latitude: location.latitude,
@@ -51,15 +92,13 @@ class WeatherBloc extends Bloc<WeatherEvent, WeatherState> {
         isStaleCache: false,
       ));
     } catch (e) {
-      final cached = await _weatherRepository.getCachedWeatherData();
-      if (cached != null) {
+      final currentState = state;
+      if (currentState is WeatherLoaded) {
         emit(WeatherLoaded(
-          weatherData: cached,
-          location: event.location,
+          weatherData: currentState.weatherData,
+          location: currentState.location,
           isStaleCache: true,
         ));
-      } else {
-        emit(WeatherError(message: e.toString()));
       }
     }
   }

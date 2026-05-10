@@ -11,6 +11,21 @@ class WeatherInitial extends WeatherState {}
 
 class WeatherLoading extends WeatherState {}
 
+class WeatherRefreshing extends WeatherState {
+  final WeatherData weatherData;
+  final Location? location;
+  final bool isStaleCache;
+
+  const WeatherRefreshing({
+    required this.weatherData,
+    this.location,
+    this.isStaleCache = false,
+  });
+
+  @override
+  List<Object?> get props => [weatherData, location, isStaleCache];
+}
+
 class WeatherLoaded extends WeatherState {
   final WeatherData weatherData;
   final Location? location;

@@ -1,6 +1,6 @@
 import 'package:get_it/get_it.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-import '../../data/remote/open_meteo/open_meteo_client.dart';
+import '../../data/remote/accuweather/accuweather_client.dart';
 import '../../data/repositories/weather_repository_impl.dart';
 import '../../data/repositories/settings_repository_impl.dart';
 import '../../data/local/hive/hive_service.dart';
@@ -18,12 +18,12 @@ Future<void> initDependencies() async {
   await hiveService.init();
   getIt.registerSingleton<HiveService>(hiveService);
 
-  final openMeteoClient = OpenMeteoClient();
-  getIt.registerSingleton<OpenMeteoClient>(openMeteoClient);
+  final accuWeatherClient = AccuWeatherClient();
+  getIt.registerSingleton<AccuWeatherClient>(accuWeatherClient);
 
   getIt.registerSingleton<WeatherRepository>(
     WeatherRepositoryImpl(
-      client: getIt<OpenMeteoClient>(),
+      client: getIt<AccuWeatherClient>(),
       hiveService: getIt<HiveService>(),
     ),
   );

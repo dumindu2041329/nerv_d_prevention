@@ -2,17 +2,17 @@ import '../../../core/constants/app_constants.dart';
 import '../../../domain/entities/weather_data.dart';
 import '../../../domain/entities/location.dart';
 import '../../../domain/repositories/weather_repository.dart';
-import '../remote/open_meteo/open_meteo_client.dart';
+import '../remote/accuweather/accuweather_client.dart';
 import '../local/hive/hive_service.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart' as geocoding;
 
 class WeatherRepositoryImpl implements WeatherRepository {
-  final OpenMeteoClient _client;
+  final AccuWeatherClient _client;
   final HiveService _hiveService;
 
   WeatherRepositoryImpl({
-    required OpenMeteoClient client,
+    required AccuWeatherClient client,
     required HiveService hiveService,
   })  : _client = client,
         _hiveService = hiveService;
@@ -164,5 +164,15 @@ class WeatherRepositoryImpl implements WeatherRepository {
 
     final elapsed = DateTime.now().difference(timestamp);
     return elapsed < ApiConstants.currentWeatherCacheTtl;
+  }
+
+  @override
+  Location? getCachedLocation() {
+    return _hiveService.getCachedLocation();
+  }
+
+  @override
+  Future<void> cacheLocation(Location location) async {
+    await _hiveService.cacheLocation(location);
   }
 }

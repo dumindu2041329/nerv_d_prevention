@@ -1,4 +1,5 @@
 import 'package:hive_flutter/hive_flutter.dart';
+import '../../../domain/entities/location.dart';
 
 class HiveService {
   static const String weatherCacheBox = 'weather_cache';
@@ -31,6 +32,33 @@ class HiveService {
 
   Future<void> clearWeatherCache() async {
     await _weatherCacheBox.clear();
+  }
+
+  Location? getCachedLocation() {
+    final data = _weatherCacheBox.get('cached_location');
+    if (data == null) return null;
+    final map = Map<String, dynamic>.from(data);
+    return Location(
+      id: map['id'] as String,
+      name: map['name'] as String,
+      country: map['country'] as String?,
+      admin1: map['admin1'] as String?,
+      latitude: (map['latitude'] as num).toDouble(),
+      longitude: (map['longitude'] as num).toDouble(),
+      isGps: map['isGps'] as bool? ?? false,
+    );
+  }
+
+  Future<void> cacheLocation(Location location) async {
+    await _weatherCacheBox.put('cached_location', {
+      'id': location.id,
+      'name': location.name,
+      'country': location.country,
+      'admin1': location.admin1,
+      'latitude': location.latitude,
+      'longitude': location.longitude,
+      'isGps': location.isGps,
+    });
   }
 
   Future<T?> getSetting<T>(String key) async {
