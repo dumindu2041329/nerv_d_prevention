@@ -3,7 +3,8 @@ import 'package:go_router/go_router.dart';
 import '../../presentation/screens/home/home_screen.dart';
 import '../../presentation/screens/map/map_screen.dart';
 import '../../presentation/screens/timeline/timeline_screen.dart';
-import '../../presentation/screens/settings/settings_screen.dart';
+import '../../presentation/screens/weather/weather_screen.dart';
+import '../../presentation/screens/menu/menu_screen.dart';
 import '../../presentation/screens/weather_detail/weather_detail_screen.dart';
 import '../../presentation/widgets/main_scaffold.dart';
 
@@ -28,21 +29,27 @@ class AppRouter {
             ),
           ),
           GoRoute(
-            path: '/map',
-            pageBuilder: (context, state) => const NoTransitionPage(
-              child: MapScreen(),
-            ),
-          ),
-          GoRoute(
             path: '/timeline',
             pageBuilder: (context, state) => const NoTransitionPage(
               child: TimelineScreen(),
             ),
           ),
           GoRoute(
-            path: '/settings',
+            path: '/map',
             pageBuilder: (context, state) => const NoTransitionPage(
-              child: SettingsScreen(),
+              child: MapScreen(),
+            ),
+          ),
+          GoRoute(
+            path: '/weather',
+            pageBuilder: (context, state) => const NoTransitionPage(
+              child: WeatherScreen(),
+            ),
+          ),
+          GoRoute(
+            path: '/menu',
+            pageBuilder: (context, state) => const NoTransitionPage(
+              child: MenuScreen(),
             ),
           ),
         ],

@@ -21,7 +21,7 @@ Future<void> main() async {
 
   final handler = const Pipeline()
       .addMiddleware(corsHeaders())
-      .addHandler(_router(apiKey));
+      .addHandler(_router(apiKey).call);
 
   final server = await shelf_io.serve(handler, 'localhost', 8080);
   // ignore: avoid_print

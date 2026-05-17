@@ -14,13 +14,14 @@ class MainScaffold extends StatefulWidget {
 class _MainScaffoldState extends State<MainScaffold> {
   int _currentIndex = 0;
 
-  static const _routes = ['/home', '/map', '/timeline', '/settings'];
+  static const _routes = ['/home', '/timeline', '/map', '/weather', '/menu'];
 
   static const _navItems = [
     _NavItem(label: 'Home', icon: Icons.home_outlined, selectedIcon: Icons.home),
-    _NavItem(label: 'Map', icon: Icons.map_outlined, selectedIcon: Icons.map),
-    _NavItem(label: 'Timeline', icon: Icons.timeline_outlined, selectedIcon: Icons.timeline),
-    _NavItem(label: 'Settings', icon: Icons.settings_outlined, selectedIcon: Icons.settings),
+    _NavItem(label: 'Timeline', icon: Icons.fact_check_outlined, selectedIcon: Icons.fact_check),
+    _NavItem(label: 'Map', icon: Icons.cloud_outlined, selectedIcon: Icons.cloud),
+    _NavItem(label: 'Weather', icon: Icons.wb_sunny_outlined, selectedIcon: Icons.wb_sunny),
+    _NavItem(label: 'Menu', icon: Icons.menu, selectedIcon: Icons.menu),
   ];
 
   void _onItemTapped(int index) {
@@ -48,11 +49,11 @@ class _MainScaffoldState extends State<MainScaffold> {
       body: widget.child,
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
-          color: theme.colorScheme.surface,
+          color: theme.scaffoldBackgroundColor,
           border: Border(
             top: BorderSide(
-              color: theme.dividerTheme.color ?? Colors.grey,
-              width: 1,
+              color: theme.dividerTheme.color ?? const Color(0xFF2A2A2A),
+              width: 0.5,
             ),
           ),
         ),

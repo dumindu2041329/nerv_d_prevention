@@ -15,7 +15,7 @@ void main() async {
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
       statusBarIconBrightness: Brightness.light,
-      systemNavigationBarColor: Color(0xFF0A0C10),
+      systemNavigationBarColor: Color(0xFF000000),
       systemNavigationBarIconBrightness: Brightness.light,
     ),
   );

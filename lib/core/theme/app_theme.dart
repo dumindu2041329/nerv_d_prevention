@@ -3,17 +3,19 @@ import 'package:google_fonts/google_fonts.dart';
 import '../constants/constants.dart';
 
 class AppTheme {
-  static const Color _colorBgPrimaryDark = Color(0xFF0A0C10);
-  static const Color _colorBgSurfaceDark = Color(0xFF12151C);
-  static const Color _colorBgElevatedDark = Color(0xFF1A1E29);
-  static const Color _colorBorderDefault = Color(0xFF2A2F3E);
-  static const Color _colorBorderSubtle = Color(0xFF1E2230);
-  static const Color _colorAccentPrimary = Color(0xFFFF6B00);
-  static const Color _colorAccentSecondary = Color(0xFFFF9500);
+  // ─── Dark Theme Palette (NERV Official) ───
+  static const Color _colorBgPrimaryDark = Color(0xFF000000);
+  static const Color _colorBgSurfaceDark = Color(0xFF1A1A1A);
+  static const Color _colorBgElevatedDark = Color(0xFF252525);
+  static const Color _colorBorderDefault = Color(0xFF2A2A2A);
+  static const Color _colorBorderSubtle = Color(0xFF1E1E1E);
+  static const Color _colorAccentPrimary = Color(0xFF00BCD4);
+  static const Color _colorAccentSecondary = Color(0xFF00E5FF);
   static const Color _colorTextPrimary = Color(0xFFF0F2F8);
   static const Color _colorTextSecondary = Color(0xFF8B95B0);
-  static const Color _colorTextTertiary = Color(0xFF4A5270);
+  static const Color _colorTextTertiary = Color(0xFF5A5A5A);
 
+  // ─── Light Theme Palette ───
   static const Color _colorBgPrimaryLight = Color(0xFFF4F6FA);
   static const Color _colorBgSurfaceLight = Color(0xFFFFFFFF);
   static const Color _colorBorderDefaultLight = Color(0xFFD0D5E8);
@@ -54,10 +56,10 @@ class AppTheme {
         backgroundColor: _colorBgPrimaryDark,
         foregroundColor: _colorTextPrimary,
         elevation: 0,
-        centerTitle: false,
+        centerTitle: true,
         titleTextStyle: GoogleFonts.inter(
           fontSize: 20 * textSizeScale.multiplier,
-          fontWeight: FontWeight.w600,
+          fontWeight: FontWeight.w700,
           color: _colorTextPrimary,
         ),
       ),
@@ -70,18 +72,21 @@ class AppTheme {
         ),
       ),
       navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: _colorBgSurfaceDark,
-        indicatorColor: adjustedAccentPrimary.withValues(alpha: 0.2),
+        backgroundColor: _colorBgPrimaryDark,
+        surfaceTintColor: Colors.transparent,
+        indicatorColor: Colors.transparent,
+        elevation: 0,
+        height: 64,
         labelTextStyle: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
             return GoogleFonts.inter(
-              fontSize: 12 * textSizeScale.multiplier,
-              fontWeight: FontWeight.w500,
+              fontSize: 11 * textSizeScale.multiplier,
+              fontWeight: FontWeight.w600,
               color: adjustedAccentPrimary,
             );
           }
           return GoogleFonts.inter(
-            fontSize: 12 * textSizeScale.multiplier,
+            fontSize: 11 * textSizeScale.multiplier,
             fontWeight: FontWeight.w500,
             color: _colorTextTertiary,
           );
@@ -99,7 +104,7 @@ class AppTheme {
       ),
       dividerTheme: const DividerThemeData(
         color: _colorBorderSubtle,
-        thickness: 1,
+        thickness: 0.5,
       ),
       chipTheme: ChipThemeData(
         backgroundColor: _colorBgElevatedDark,
@@ -144,10 +149,10 @@ class AppTheme {
         backgroundColor: _colorBgPrimaryLight,
         foregroundColor: _colorTextPrimaryLight,
         elevation: 0,
-        centerTitle: false,
+        centerTitle: true,
         titleTextStyle: GoogleFonts.inter(
           fontSize: 20 * textSizeScale.multiplier,
-          fontWeight: FontWeight.w600,
+          fontWeight: FontWeight.w700,
           color: _colorTextPrimaryLight,
         ),
       ),
@@ -166,13 +171,13 @@ class AppTheme {
         labelTextStyle: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
             return GoogleFonts.inter(
-              fontSize: 12 * textSizeScale.multiplier,
-              fontWeight: FontWeight.w500,
+              fontSize: 11 * textSizeScale.multiplier,
+              fontWeight: FontWeight.w600,
               color: _colorAccentPrimary,
             );
           }
           return GoogleFonts.inter(
-            fontSize: 12 * textSizeScale.multiplier,
+            fontSize: 11 * textSizeScale.multiplier,
             fontWeight: FontWeight.w500,
             color: _colorTextSecondaryLight,
           );
@@ -190,7 +195,7 @@ class AppTheme {
       ),
       dividerTheme: const DividerThemeData(
         color: _colorBorderDefaultLight,
-        thickness: 1,
+        thickness: 0.5,
       ),
     );
   }
