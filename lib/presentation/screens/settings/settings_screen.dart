@@ -14,21 +14,15 @@ class SettingsScreen extends StatelessWidget {
           builder: (context, state) {
             return CustomScrollView(
               slivers: [
-                SliverToBoxAdapter(
-                  child: _buildHeader(context),
-                ),
+                SliverToBoxAdapter(child: _buildHeader(context)),
                 SliverToBoxAdapter(
                   child: _buildAccessibilitySection(context, state),
                 ),
                 SliverToBoxAdapter(
                   child: _buildNotificationSection(context, state),
                 ),
-                SliverToBoxAdapter(
-                  child: _buildAboutSection(context),
-                ),
-                SliverToBoxAdapter(
-                  child: _buildFooter(context),
-                ),
+                SliverToBoxAdapter(child: _buildAboutSection(context)),
+                SliverToBoxAdapter(child: _buildFooter(context)),
               ],
             );
           },
@@ -97,10 +91,7 @@ class SettingsScreen extends StatelessWidget {
                     activeThumbColor: theme.colorScheme.primary,
                   ),
                 ),
-                Divider(
-                  height: 1,
-                  color: theme.dividerTheme.color,
-                ),
+                Divider(height: 1, color: theme.dividerTheme.color),
                 _buildSettingsTile(
                   context,
                   icon: Icons.text_fields,
@@ -108,21 +99,16 @@ class SettingsScreen extends StatelessWidget {
                   subtitle: 'Font Size: ${state.textSizeScale.label}',
                   onTap: () => _showTextSizeSelector(context, state),
                 ),
-                Divider(
-                  height: 1,
-                  color: theme.dividerTheme.color,
-                ),
+                Divider(height: 1, color: theme.dividerTheme.color),
                 _buildSettingsTile(
                   context,
                   icon: Icons.format_size,
                   title: 'Font Weight',
-                  subtitle: 'Font Weight: ${_getFontWeightLabel(state.fontWeightScale)}',
+                  subtitle:
+                      'Font Weight: ${_getFontWeightLabel(state.fontWeightScale)}',
                   onTap: () => _showFontWeightSelector(context, state),
                 ),
-                Divider(
-                  height: 1,
-                  color: theme.dividerTheme.color,
-                ),
+                Divider(height: 1, color: theme.dividerTheme.color),
                 _buildSettingsTile(
                   context,
                   icon: Icons.palette_outlined,
@@ -130,10 +116,7 @@ class SettingsScreen extends StatelessWidget {
                   subtitle: 'Colour Vision: ${state.colourVisionMode.label}',
                   onTap: () => _showColourVisionSelector(context, state),
                 ),
-                Divider(
-                  height: 1,
-                  color: theme.dividerTheme.color,
-                ),
+                Divider(height: 1, color: theme.dividerTheme.color),
                 _buildSettingsTile(
                   context,
                   icon: Icons.contrast,
@@ -181,47 +164,51 @@ class SettingsScreen extends StatelessWidget {
                   value: true,
                   onChanged: (_) {},
                 ),
-                Divider(
-                  height: 1,
-                  color: theme.dividerTheme.color,
-                ),
+                Divider(height: 1, color: theme.dividerTheme.color),
                 _buildNotificationToggle(
                   context,
-                  title: 'Earthquake Alerts',
-                  subtitle: 'Seismic Activity',
+                  title: 'Flood Alerts',
+                  subtitle: 'River & Urban Flooding',
                   value: true,
                   onChanged: (_) {},
                 ),
-                Divider(
-                  height: 1,
-                  color: theme.dividerTheme.color,
-                ),
+                Divider(height: 1, color: theme.dividerTheme.color),
                 _buildNotificationToggle(
                   context,
-                  title: 'Tsunami Alerts',
-                  subtitle: 'Ocean Warning',
+                  title: 'Landslide Alerts',
+                  subtitle: 'Slope Failure Warnings',
                   value: true,
                   onChanged: (_) {},
                 ),
-                Divider(
-                  height: 1,
-                  color: theme.dividerTheme.color,
-                ),
+                Divider(height: 1, color: theme.dividerTheme.color),
                 _buildNotificationToggle(
                   context,
-                  title: 'Weather Warnings',
-                  subtitle: 'Severe Weather',
+                  title: 'Cyclone Advisories',
+                  subtitle: 'Tropical Storm Warnings',
                   value: true,
                   onChanged: (_) {},
                 ),
-                Divider(
-                  height: 1,
-                  color: theme.dividerTheme.color,
-                ),
+                Divider(height: 1, color: theme.dividerTheme.color),
                 _buildNotificationToggle(
                   context,
-                  title: 'J-Alert',
-                  subtitle: 'National Warning',
+                  title: 'Lightning Alerts',
+                  subtitle: 'High Lightning Activity',
+                  value: true,
+                  onChanged: (_) {},
+                ),
+                Divider(height: 1, color: theme.dividerTheme.color),
+                _buildNotificationToggle(
+                  context,
+                  title: 'Coastal Warnings',
+                  subtitle: 'High Waves & Storm Surge',
+                  value: true,
+                  onChanged: (_) {},
+                ),
+                Divider(height: 1, color: theme.dividerTheme.color),
+                _buildNotificationToggle(
+                  context,
+                  title: 'Tsunami Bulletins',
+                  subtitle: 'Ocean Seismic Warnings',
                   value: true,
                   onChanged: (_) {},
                 ),
@@ -264,20 +251,14 @@ class SettingsScreen extends StatelessWidget {
                   title: 'About NERV',
                   onTap: () => _showAboutDialog(context),
                 ),
-                Divider(
-                  height: 1,
-                  color: theme.dividerTheme.color,
-                ),
+                Divider(height: 1, color: theme.dividerTheme.color),
                 _buildSettingsTile(
                   context,
                   icon: Icons.privacy_tip_outlined,
                   title: 'Privacy Policy',
                   onTap: () {},
                 ),
-                Divider(
-                  height: 1,
-                  color: theme.dividerTheme.color,
-                ),
+                Divider(height: 1, color: theme.dividerTheme.color),
                 _buildSettingsTile(
                   context,
                   icon: Icons.description_outlined,
@@ -315,7 +296,7 @@ class SettingsScreen extends StatelessWidget {
               ),
               const SizedBox(width: AppSpacing.space2),
               Text(
-                'NERV',
+                'NERV — Sri Lanka',
                 style: theme.textTheme.titleSmall?.copyWith(
                   fontWeight: FontWeight.w700,
                   letterSpacing: 1,
@@ -332,7 +313,15 @@ class SettingsScreen extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.space2),
           Text(
-            'Weather data: AccuWeather',
+            'Weather data: Open-Meteo',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+              fontSize: 10,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.space1),
+          Text(
+            'Alerts: DMC Sri Lanka',
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
               fontSize: 10,
@@ -354,11 +343,7 @@ class SettingsScreen extends StatelessWidget {
 
     return Row(
       children: [
-        Icon(
-          icon,
-          size: 20,
-          color: theme.colorScheme.primary,
-        ),
+        Icon(icon, size: 20, color: theme.colorScheme.primary),
         const SizedBox(width: AppSpacing.space3),
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -406,11 +391,7 @@ class SettingsScreen extends StatelessWidget {
                   color: theme.colorScheme.primary.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
                 ),
-                child: Icon(
-                  icon,
-                  size: 20,
-                  color: theme.colorScheme.primary,
-                ),
+                child: Icon(icon, size: 20, color: theme.colorScheme.primary),
               ),
               const SizedBox(width: AppSpacing.space4),
               Expanded(
@@ -427,7 +408,9 @@ class SettingsScreen extends StatelessWidget {
                       Text(
                         subtitle,
                         style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                          color: theme.colorScheme.onSurface.withValues(
+                            alpha: 0.5,
+                          ),
                           fontSize: 11,
                         ),
                       ),
@@ -607,45 +590,51 @@ class SettingsScreen extends StatelessWidget {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: options.map((option) {
-                final isSelected = option == currentValue;
-                return Material(
-                  color: isSelected
-                      ? theme.colorScheme.primary.withValues(alpha: 0.1)
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-                  child: InkWell(
-                    onTap: () {
-                      onSelected(option);
-                      Navigator.pop(context);
-                    },
-                    borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-                    child: Padding(
-                      padding: const EdgeInsets.all(AppSpacing.space4),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              labelBuilder(option),
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                                color: isSelected
-                                    ? theme.colorScheme.primary
-                                    : theme.colorScheme.onSurface,
-                              ),
+                      final isSelected = option == currentValue;
+                      return Material(
+                        color: isSelected
+                            ? theme.colorScheme.primary.withValues(alpha: 0.1)
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(
+                          AppSpacing.radiusMd,
+                        ),
+                        child: InkWell(
+                          onTap: () {
+                            onSelected(option);
+                            Navigator.pop(context);
+                          },
+                          borderRadius: BorderRadius.circular(
+                            AppSpacing.radiusMd,
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(AppSpacing.space4),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    labelBuilder(option),
+                                    style: theme.textTheme.bodyMedium?.copyWith(
+                                      fontWeight: isSelected
+                                          ? FontWeight.w600
+                                          : FontWeight.normal,
+                                      color: isSelected
+                                          ? theme.colorScheme.primary
+                                          : theme.colorScheme.onSurface,
+                                    ),
+                                  ),
+                                ),
+                                if (isSelected)
+                                  Icon(
+                                    Icons.check,
+                                    color: theme.colorScheme.primary,
+                                    size: 20,
+                                  ),
+                              ],
                             ),
                           ),
-                          if (isSelected)
-                            Icon(
-                              Icons.check,
-                              color: theme.colorScheme.primary,
-                              size: 20,
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-                );
-              }).toList(),
+                        ),
+                      );
+                    }).toList(),
                   ),
                 ),
               ),
@@ -692,10 +681,7 @@ class SettingsScreen extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'Version 1.0.0',
-                style: theme.textTheme.bodyMedium,
-              ),
+              Text('Version 1.0.0', style: theme.textTheme.bodyMedium),
               const SizedBox(height: AppSpacing.space4),
               Text(
                 'NERV Disaster Prevention App delivers real-time alerts for earthquakes, tsunamis, volcanic eruptions, and special warnings. Weather and hazard information is optimized based on your current location or registered locations.',

@@ -4,6 +4,8 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:dio/dio.dart';
 import '../../../core/di/injection.dart';
+import '../../../core/constants/app_sl_constants.dart';
+import '../../../core/constants/weather_codes.dart';
 import '../../blocs/weather/weather_bloc.dart';
 
 class MapScreen extends StatefulWidget {
@@ -15,8 +17,8 @@ class MapScreen extends StatefulWidget {
 
 class _MapScreenState extends State<MapScreen> {
   final MapController _mapController = MapController();
-  double _currentZoom = 5.0;
-  LatLng _currentCenter = const LatLng(36.0, 138.0);
+  double _currentZoom = SLMapConstants.initialZoom;
+  LatLng _currentCenter = SLMapConstants.center;
 
   String? _rainviewerPath;
   final DateTime _currentTime = DateTime.now();
@@ -29,10 +31,14 @@ class _MapScreenState extends State<MapScreen> {
 
   Future<void> _fetchRainviewerData() async {
     try {
-      final response = await Dio().get('https://api.rainviewer.com/public/weather-maps.json');
+      final response = await Dio().get(
+        'https://api.rainviewer.com/public/weather-maps.json',
+      );
       if (response.statusCode == 200) {
         final data = response.data;
-        if (data != null && data['radar'] != null && data['radar']['past'] != null) {
+        if (data != null &&
+            data['radar'] != null &&
+            data['radar']['past'] != null) {
           final past = data['radar']['past'] as List;
           if (past.isNotEmpty) {
             setState(() {
@@ -44,6 +50,10 @@ class _MapScreenState extends State<MapScreen> {
     } catch (e) {
       debugPrint('Failed to load Rainviewer data: $e');
     }
+  }
+
+  void _zoomToSriLanka() {
+    _mapController.move(SLMapConstants.center, SLMapConstants.initialZoom);
   }
 
   @override
@@ -61,8 +71,8 @@ class _MapScreenState extends State<MapScreen> {
                 options: MapOptions(
                   initialCenter: _currentCenter,
                   initialZoom: _currentZoom,
-                  minZoom: 3,
-                  maxZoom: 18,
+                  minZoom: SLMapConstants.minZoom,
+                  maxZoom: SLMapConstants.maxZoom,
                   onPositionChanged: (position, hasGesture) {
                     if (hasGesture) {
                       setState(() {
@@ -74,7 +84,8 @@ class _MapScreenState extends State<MapScreen> {
                 ),
                 children: [
                   TileLayer(
-                    urlTemplate: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
+                    urlTemplate:
+                        'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
                     subdomains: const ['a', 'b', 'c', 'd'],
                     userAgentPackageName: 'com.example.nerv_d_prevention',
                   ),
@@ -91,6 +102,28 @@ class _MapScreenState extends State<MapScreen> {
               child: _buildTopOverlay(context),
             ),
 
+            // Weather chip (floating, top-left below title)
+            Positioned(
+              left: 16,
+              top: MediaQuery.of(context).padding.top + 80,
+              child: _buildWeatherChip(context),
+            ),
+
+            // Map controls (right side)
+            Positioned(
+              right: 16,
+              top: MediaQuery.of(context).padding.top + 80,
+              child: Column(
+                children: [
+                  _buildMapButton(
+                    Icons.my_location,
+                    'Centre on Sri Lanka',
+                    _zoomToSriLanka,
+                  ),
+                ],
+              ),
+            ),
+
             // Bottom: Time Scrubber
             Positioned(
               left: 0,
@@ -103,6 +136,105 @@ class _MapScreenState extends State<MapScreen> {
       ),
     );
   }
+
+  // ── Weather Chip ────────────────────────────────────────────────────
+
+  Widget _buildWeatherChip(BuildContext context) {
+    return BlocBuilder<WeatherBloc, WeatherState>(
+      builder: (context, state) {
+        if (state is WeatherLoaded) {
+          final current = state.weatherData.current;
+          final emoji = WeatherCodeMapping.getIcon(current.weatherCode);
+          final locationName = state.location?.name ?? 'Current Location';
+
+          return Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1A1E29).withValues(alpha: 0.92),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: Colors.white.withValues(alpha: 0.1),
+                width: 1,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(emoji, style: const TextStyle(fontSize: 22)),
+                const SizedBox(width: 8),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      '${current.temperature.toStringAsFixed(0)}°C',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    Text(
+                      locationName,
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.5),
+                        fontSize: 10,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          );
+        }
+        return const SizedBox.shrink();
+      },
+    );
+  }
+
+  // ── Map Controls ────────────────────────────────────────────────────
+
+  Widget _buildMapButton(
+    IconData icon,
+    String tooltip,
+    VoidCallback onPressed,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: GestureDetector(
+        onTap: onPressed,
+        child: Container(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            color: const Color(0xFF1A1E29),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: Colors.white.withValues(alpha: 0.1),
+              width: 1,
+            ),
+          ),
+          child: Icon(
+            icon,
+            color: Colors.white.withValues(alpha: 0.8),
+            size: 24,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRainOverlay() {
+    if (_rainviewerPath == null) return const SizedBox.shrink();
+    return TileLayer(
+      urlTemplate:
+          'https://tilecache.rainviewer.com${_rainviewerPath!}/256/{z}/{x}/{y}/2/1_1.png',
+      subdomains: const [],
+      userAgentPackageName: 'com.example.nerv_d_prevention',
+    );
+  }
+
+  // ── Top Overlay ─────────────────────────────────────────────────────
 
   Widget _buildTopOverlay(BuildContext context) {
     return Container(
@@ -125,7 +257,7 @@ class _MapScreenState extends State<MapScreen> {
         children: [
           // Title
           const Text(
-            'Rain Radar',
+            'Rain Radar — Sri Lanka',
             style: TextStyle(
               color: Colors.white,
               fontSize: 18,
@@ -152,15 +284,15 @@ class _MapScreenState extends State<MapScreen> {
               borderRadius: BorderRadius.circular(2),
               gradient: const LinearGradient(
                 colors: [
-                  Color(0xFF80D8FF), // light blue
-                  Color(0xFF448AFF), // blue
-                  Color(0xFF2962FF), // dark blue
-                  Color(0xFF1A237E), // navy
-                  Color(0xFFFFEB3B), // yellow
-                  Color(0xFFFF9800), // orange
-                  Color(0xFFFF5722), // red-orange
-                  Color(0xFFF44336), // red
-                  Color(0xFFE91E63), // pink
+                  Color(0xFF80D8FF),
+                  Color(0xFF448AFF),
+                  Color(0xFF2962FF),
+                  Color(0xFF1A237E),
+                  Color(0xFFFFEB3B),
+                  Color(0xFFFF9800),
+                  Color(0xFFFF5722),
+                  Color(0xFFF44336),
+                  Color(0xFFE91E63),
                 ],
               ),
             ),
@@ -264,15 +396,21 @@ class _MapScreenState extends State<MapScreen> {
 
   Widget _buildTimeTicks(DateTime now) {
     final startMinute = (now.minute ~/ 10 * 10) - 30;
-    final startTime = DateTime(now.year, now.month, now.day, now.hour, 0)
-        .add(Duration(minutes: startMinute));
+    final startTime = DateTime(
+      now.year,
+      now.month,
+      now.day,
+      now.hour,
+      0,
+    ).add(Duration(minutes: startMinute));
 
     return SizedBox(
       height: 36,
       child: Row(
         children: List.generate(13, (index) {
           final tickTime = startTime.add(Duration(minutes: index * 5));
-          final isCurrentTick = tickTime.hour == now.hour &&
+          final isCurrentTick =
+              tickTime.hour == now.hour &&
               (tickTime.minute ~/ 10) == (now.minute ~/ 10);
           final showLabel = index % 2 == 0;
 
@@ -306,20 +444,5 @@ class _MapScreenState extends State<MapScreen> {
         }),
       ),
     );
-  }
-
-  Widget _buildRainOverlay() {
-    if (_rainviewerPath != null) {
-      return Opacity(
-        opacity: 0.6,
-        child: TileLayer(
-          urlTemplate: 'https://tilecache.rainviewer.com{path}/256/{z}/{x}/{y}/2/1_1.png',
-          additionalOptions: {
-            'path': _rainviewerPath!,
-          },
-        ),
-      );
-    }
-    return const SizedBox.shrink();
   }
 }

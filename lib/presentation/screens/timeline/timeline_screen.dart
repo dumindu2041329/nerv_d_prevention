@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
-import '../../../core/constants/constants.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../../core/constants/app_sl_constants.dart';
+import '../../../core/di/injection.dart';
+import '../../../core/utils/weather_alert_deriver.dart';
 import '../../../domain/entities/timeline_event.dart';
 import '../../../core/utils/date_time_utils.dart';
+import '../../blocs/weather/weather_bloc.dart';
 import '../../widgets/national_local_toggle.dart';
 
 class TimelineScreen extends StatefulWidget {
@@ -12,59 +16,158 @@ class TimelineScreen extends StatefulWidget {
 }
 
 class _TimelineScreenState extends State<TimelineScreen> {
-  bool _isNational = true;
+  bool _isIslandWide = true;
+  SLDistrict? _selectedDistrict;
+
+  void _updateDistrict(bool isNational, SLDistrict? district) {
+    setState(() {
+      _isIslandWide = isNational;
+      _selectedDistrict = district;
+    });
+    if (district != null) {
+      context.read<WeatherBloc>().add(
+        LoadWeatherForDistrict(district: district),
+      );
+    } else {
+      context.read<WeatherBloc>().add(const LoadWeather());
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: SafeArea(
-        child: Column(
-          children: [
-            NationalLocalToggle(
-              isNational: _isNational,
-              onChanged: (val) => setState(() => _isNational = val),
-            ),
-            Expanded(
-              child: _buildTimelineList(context),
-            ),
-          ],
+    return BlocProvider(
+      create: (_) => getIt<WeatherBloc>()..add(const LoadWeather()),
+      child: Scaffold(
+        backgroundColor: Colors.black,
+        body: SafeArea(
+          child: Column(
+            children: [
+              NationalLocalToggle(
+                isNational: _isIslandWide,
+                selectedDistrict: _selectedDistrict,
+                onChanged: (isNational) {
+                  _updateDistrict(isNational, null);
+                },
+                onDistrictSelected: (district) {
+                  _updateDistrict(false, district);
+                },
+              ),
+              Expanded(child: _buildTimelineContent(context)),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildTimelineList(BuildContext context) {
-    final events = _getDemoEvents();
+  Widget _buildTimelineContent(BuildContext context) {
+    return BlocBuilder<WeatherBloc, WeatherState>(
+      builder: (context, state) {
+        if (state is WeatherLoading) {
+          return const Center(
+            child: CircularProgressIndicator(color: Color(0xFF00BCD4)),
+          );
+        }
+
+        if (state is WeatherError) {
+          return Center(
+            child: Text(
+              state.message,
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.5),
+                fontSize: 16,
+              ),
+            ),
+          );
+        }
+
+        if (state is WeatherLoaded) {
+          final events = WeatherAlertDeriver.deriveTimelineEvents(
+            state.weatherData,
+            districtName: state.selectedDistrict?.displayName,
+          );
+          return _buildTimelineList(context, events);
+        }
+
+        return Center(
+          child: Text(
+            'Loading timeline...',
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.4),
+              fontSize: 14,
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildTimelineList(BuildContext context, List<TimelineEvent> events) {
     final grouped = _groupEventsByDate(events);
+
+    if (grouped.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.check_circle_outline,
+              color: Colors.white.withValues(alpha: 0.3),
+              size: 48,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'No active alerts',
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.5),
+                fontSize: 16,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Weather conditions are calm',
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.3),
+                fontSize: 13,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
 
     return ListView.builder(
       padding: const EdgeInsets.symmetric(horizontal: 0),
       itemCount: grouped.length,
       itemBuilder: (context, index) {
         final group = grouped[index];
-        return _buildDateGroup(context, group);
+        return _buildDateGroup(context, group, grouped);
       },
     );
   }
 
-  Widget _buildDateGroup(BuildContext context, _DateGroup group) {
+  Widget _buildDateGroup(
+    BuildContext context,
+    _DateGroup group,
+    List<_DateGroup> allGroups,
+  ) {
+    final groupIndex = allGroups.indexOf(group);
+
     return Column(
       children: [
         // Date separator pill
         _buildDateSeparator(group.label),
         // Events in this group
         ...group.events.asMap().entries.map((entry) {
-          final isFirst = entry.key == 0 && grouped.indexOf(group) == 0;
-          final isLast = entry.key == group.events.length - 1 &&
-              grouped.indexOf(group) == grouped.length - 1;
+          final isFirst = entry.key == 0 && groupIndex == 0;
+          final isLast =
+              entry.key == group.events.length - 1 &&
+              groupIndex == allGroups.length - 1;
           return _buildEventItem(context, entry.value, isFirst, isLast);
         }),
       ],
     );
   }
-
-  List<_DateGroup> get grouped => _groupEventsByDate(_getDemoEvents());
 
   Widget _buildDateSeparator(String label) {
     return Padding(
@@ -96,6 +199,8 @@ class _TimelineScreenState extends State<TimelineScreen> {
     bool isLast,
   ) {
     final isHighlighted = isFirst;
+    final color = event.severity.color;
+    final isLifted = event.isLifted;
 
     return IntrinsicHeight(
       child: Container(
@@ -133,15 +238,19 @@ class _TimelineScreenState extends State<TimelineScreen> {
                         ? Colors.transparent
                         : Colors.white.withValues(alpha: 0.15),
                   ),
-                  // Circle dot
+                  // Circle dot with severity color
                   Container(
                     width: 36,
                     height: 36,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: Colors.black,
+                      color: isLifted
+                          ? Colors.black
+                          : color.withValues(alpha: 0.1),
                       border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.25),
+                        color: isLifted
+                            ? Colors.white.withValues(alpha: 0.25)
+                            : color.withValues(alpha: 0.5),
                         width: 1.5,
                       ),
                     ),
@@ -149,7 +258,9 @@ class _TimelineScreenState extends State<TimelineScreen> {
                       child: Icon(
                         _getEventIcon(event.type),
                         size: 16,
-                        color: Colors.white.withValues(alpha: 0.6),
+                        color: isLifted
+                            ? Colors.white.withValues(alpha: 0.4)
+                            : color.withValues(alpha: 0.8),
                       ),
                     ),
                   ),
@@ -177,19 +288,50 @@ class _TimelineScreenState extends State<TimelineScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              _getEventTypeLabel(event.type),
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 16,
-                                fontWeight: FontWeight.w700,
-                              ),
+                            Row(
+                              children: [
+                                Text(
+                                  _getEventTypeLabel(event.type),
+                                  style: TextStyle(
+                                    color: isLifted
+                                        ? Colors.white.withValues(alpha: 0.5)
+                                        : color,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                if (isLifted) ...[
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 6,
+                                      vertical: 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withValues(
+                                        alpha: 0.1,
+                                      ),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: const Text(
+                                      'LIFTED',
+                                      style: TextStyle(
+                                        color: Colors.white54,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ],
                             ),
                             const SizedBox(height: 2),
                             Text(
                               event.title,
                               style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.6),
+                                color: isLifted
+                                    ? Colors.white.withValues(alpha: 0.3)
+                                    : Colors.white.withValues(alpha: 0.6),
                                 fontSize: 14,
                               ),
                               maxLines: 1,
@@ -215,17 +357,25 @@ class _TimelineScreenState extends State<TimelineScreen> {
   }
 
   String _getEventTypeLabel(String type) {
+    final alertType = SLAlertType.fromString(type);
+    if (alertType != null) return alertType.fullLabel;
+
     switch (type) {
+      case 'flood':
+        return 'Flood Warning';
+      case 'landslide':
+        return 'Landslide Alert';
+      case 'cyclone':
+        return 'Cyclone Advisory';
+      case 'lightning':
+        return 'Lightning Alert';
+      case 'coastal':
+      case 'coastalWarning':
+        return 'Coastal Warning';
+      case 'tsunami':
+        return 'Tsunami Bulletin';
       case 'earthquake':
         return 'Earthquake Info';
-      case 'tsunami':
-        return 'Tsunami Warning';
-      case 'weather':
-        return 'Weather Alert';
-      case 'volcano':
-        return 'Volcano Alert';
-      case 'j-alert':
-        return 'J-Alert';
       default:
         return 'Information';
     }
@@ -233,16 +383,21 @@ class _TimelineScreenState extends State<TimelineScreen> {
 
   IconData _getEventIcon(String type) {
     switch (type) {
-      case 'earthquake':
-        return Icons.public;
+      case 'flood':
+        return Icons.water;
+      case 'landslide':
+        return Icons.terrain;
+      case 'cyclone':
+        return Icons.cyclone;
+      case 'lightning':
+        return Icons.bolt;
+      case 'coastal':
+      case 'coastalWarning':
+        return Icons.beach_access;
       case 'tsunami':
         return Icons.waves;
-      case 'weather':
-        return Icons.cloud;
-      case 'volcano':
-        return Icons.landscape;
-      case 'j-alert':
-        return Icons.campaign;
+      case 'earthquake':
+        return Icons.public;
       default:
         return Icons.info;
     }
@@ -253,17 +408,26 @@ class _TimelineScreenState extends State<TimelineScreen> {
 
     for (final event in events) {
       final now = DateTime.now();
-      final eventDate = DateTime(event.time.year, event.time.month, event.time.day);
+      final eventDate = DateTime(
+        event.time.year,
+        event.time.month,
+        event.time.day,
+      );
       final today = DateTime(now.year, now.month, now.day);
       final yesterday = today.subtract(const Duration(days: 1));
+      final tomorrow = today.add(const Duration(days: 1));
 
       String label;
       if (eventDate == today) {
         label = 'Today';
       } else if (eventDate == yesterday) {
         label = 'Yesterday';
+      } else if (eventDate == tomorrow) {
+        label = 'Tomorrow';
       } else {
-        label = '${event.time.month}/${event.time.day}';
+        final days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+        label =
+            '${days[event.time.weekday - 1]} ${event.time.month}/${event.time.day}';
       }
 
       groups.putIfAbsent(label, () => []);
@@ -271,94 +435,6 @@ class _TimelineScreenState extends State<TimelineScreen> {
     }
 
     return groups.entries.map((e) => _DateGroup(e.key, e.value)).toList();
-  }
-
-  List<TimelineEvent> _getDemoEvents() {
-    final now = DateTime.now();
-    return [
-      TimelineEvent(
-        id: '1',
-        type: 'earthquake',
-        title: 'Off. Ibaraki (Int. 1)',
-        description: 'Epicenter depth 50km, Magnitude 2.9',
-        location: 'Off. Ibaraki',
-        severity: SeverityLevel.info,
-        time: now.subtract(const Duration(hours: 1)),
-      ),
-      TimelineEvent(
-        id: '2',
-        type: 'earthquake',
-        title: 'Off. Iwate (Int. 1)',
-        description: 'Epicenter depth 30km',
-        location: 'Off. Iwate',
-        severity: SeverityLevel.info,
-        time: now.subtract(const Duration(hours: 9)),
-      ),
-      TimelineEvent(
-        id: '3',
-        type: 'earthquake',
-        title: 'Off. Miyagi (Int. 2)',
-        description: 'Epicenter depth 40km',
-        location: 'Off. Miyagi',
-        severity: SeverityLevel.advisory,
-        time: now.subtract(const Duration(hours: 15)),
-      ),
-      TimelineEvent(
-        id: '4',
-        type: 'earthquake',
-        title: 'Off. Sanriku (Int. 2)',
-        description: 'Epicenter depth 10km',
-        location: 'Off. Sanriku',
-        severity: SeverityLevel.advisory,
-        time: now.subtract(const Duration(hours: 18)),
-      ),
-      TimelineEvent(
-        id: '5',
-        type: 'earthquake',
-        title: 'Kagoshima Satsuma (Int. 2)',
-        description: 'Epicenter depth 10km',
-        location: 'Kagoshima Satsuma',
-        severity: SeverityLevel.advisory,
-        time: now.subtract(const Duration(hours: 21)),
-      ),
-      TimelineEvent(
-        id: '6',
-        type: 'earthquake',
-        title: 'Kagoshima Satsuma (Int. 1)',
-        description: 'Epicenter depth 10km',
-        location: 'Kagoshima Satsuma',
-        severity: SeverityLevel.info,
-        time: now.subtract(const Duration(hours: 22)),
-      ),
-      TimelineEvent(
-        id: '7',
-        type: 'earthquake',
-        title: 'Eastern Shimane (Int. 1)',
-        description: 'Epicenter depth 20km',
-        location: 'Eastern Shimane',
-        severity: SeverityLevel.info,
-        time: now.subtract(const Duration(hours: 23)),
-      ),
-      // Yesterday's events
-      TimelineEvent(
-        id: '8',
-        type: 'earthquake',
-        title: 'Iriomotejima (Int. 1)',
-        description: 'Epicenter depth 30km',
-        location: 'Iriomotejima',
-        severity: SeverityLevel.info,
-        time: now.subtract(const Duration(days: 1, hours: 2)),
-      ),
-      TimelineEvent(
-        id: '9',
-        type: 'earthquake',
-        title: 'Kii Channel (Int. 2)',
-        description: 'Epicenter depth 15km',
-        location: 'Kii Channel',
-        severity: SeverityLevel.advisory,
-        time: now.subtract(const Duration(days: 1, hours: 15)),
-      ),
-    ];
   }
 }
 
@@ -373,8 +449,5 @@ class TimelineFilterData {
   final String id;
   final String label;
 
-  const TimelineFilterData({
-    required this.id,
-    required this.label,
-  });
+  const TimelineFilterData({required this.id, required this.label});
 }

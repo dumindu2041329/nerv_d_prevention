@@ -14,8 +14,8 @@ class WeatherRepositoryImpl implements WeatherRepository {
   WeatherRepositoryImpl({
     required AccuWeatherClient client,
     required HiveService hiveService,
-  })  : _client = client,
-        _hiveService = hiveService;
+  }) : _client = client,
+       _hiveService = hiveService;
 
   @override
   Future<WeatherData> getWeatherData({
@@ -47,7 +47,6 @@ class WeatherRepositoryImpl implements WeatherRepository {
     bool serviceEnabled;
     LocationPermission permission;
 
-    // Test if location services are enabled.
     serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
       return null;
@@ -83,12 +82,16 @@ class WeatherRepositoryImpl implements WeatherRepository {
         );
         if (placemarks.isNotEmpty) {
           final place = placemarks.first;
-          name = place.locality ?? place.subAdministrativeArea ?? place.name ?? 'Current Location';
+          name =
+              place.locality ??
+              place.subAdministrativeArea ??
+              place.name ??
+              'Current Location';
           country = place.country;
           admin1 = place.administrativeArea;
         }
       } catch (e) {
-        // Fallback to coordinates or default string if reverse geocoding fails
+        // Fallback to coordinates
       }
 
       return Location(
@@ -105,22 +108,14 @@ class WeatherRepositoryImpl implements WeatherRepository {
     }
   }
 
+  // ── Cache (de)serialization with full hourly + daily support ─────────
+
   @override
   Future<void> cacheWeatherData(WeatherData data) async {
     await _hiveService.cacheWeatherData({
-      'current': {
-        'time': data.current.time.toIso8601String(),
-        'temperature_2m': data.current.temperature,
-        'apparent_temperature': data.current.apparentTemperature,
-        'weather_code': data.current.weatherCode,
-        'wind_speed_10m': data.current.windSpeed,
-        'wind_direction_10m': data.current.windDirection,
-        'relative_humidity_2m': data.current.humidity,
-        'precipitation': data.current.precipitation,
-        'surface_pressure': data.current.surfacePressure,
-        'cloud_cover': data.current.cloudCover,
-        'uv_index': data.current.uvIndex,
-      },
+      'current': _serializeCurrent(data.current),
+      'hourly': data.hourly.map(_serializeHourly).toList(),
+      'daily': data.daily.map(_serializeDaily).toList(),
       'timezone': data.timezone,
       'lastUpdated': data.lastUpdated.toIso8601String(),
     });
@@ -133,24 +128,82 @@ class WeatherRepositoryImpl implements WeatherRepository {
 
     try {
       final currentData = data['current'] as Map<String, dynamic>;
+      final hourlyData = data['hourly'] as List?;
+      final dailyData = data['daily'] as List?;
+      final timezone = (data['timezone'] as String?) ?? 'UTC';
+      final lastUpdated = DateTime.parse(data['lastUpdated'] as String);
+
+      return WeatherData(
+        current: _deserializeCurrent(currentData),
+        hourly:
+            hourlyData
+                ?.map((e) => _deserializeHourly(e as Map<String, dynamic>))
+                .toList() ??
+            [],
+        daily:
+            dailyData
+                ?.map((e) => _deserializeDaily(e as Map<String, dynamic>))
+                .toList() ??
+            [],
+        timezone: timezone,
+        lastUpdated: lastUpdated,
+      );
+    } catch (e) {
+      // Fallback to old-format cache (current only)
+      return _tryLegacyCacheDeserialize(data);
+    }
+  }
+
+  /// Attempts to deserialize the older cache format which only stored
+  /// 'current' with different key names (Open-Meteo style).
+  WeatherData? _tryLegacyCacheDeserialize(Map<String, dynamic> data) {
+    try {
+      final currentMap = data['current'] as Map<String, dynamic>;
       return WeatherData(
         current: CurrentWeather(
-          time: DateTime.parse(currentData['time']),
-          temperature: (currentData['temperature_2m'] as num).toDouble(),
-          apparentTemperature: (currentData['apparent_temperature'] as num).toDouble(),
-          weatherCode: (currentData['weather_code'] as num).toInt(),
-          windSpeed: (currentData['wind_speed_10m'] as num).toDouble(),
-          windDirection: (currentData['wind_direction_10m'] as num).toDouble(),
-          humidity: (currentData['relative_humidity_2m'] as num).toDouble(),
-          precipitation: (currentData['precipitation'] as num).toDouble(),
-          surfacePressure: (currentData['surface_pressure'] as num).toDouble(),
-          cloudCover: (currentData['cloud_cover'] as num).toDouble(),
-          uvIndex: (currentData['uv_index'] as num).toDouble(),
+          time: DateTime.parse(currentMap['time'] as String),
+          temperature:
+              (currentMap['temperature_2m'] as num?)?.toDouble() ??
+              (currentMap['temperature'] as num?)?.toDouble() ??
+              0,
+          apparentTemperature:
+              (currentMap['apparent_temperature'] as num?)?.toDouble() ??
+              (currentMap['apparentTemperature'] as num?)?.toDouble() ??
+              0,
+          weatherCode:
+              (currentMap['weather_code'] as num?)?.toInt() ??
+              (currentMap['weatherCode'] as num?)?.toInt() ??
+              0,
+          windSpeed:
+              (currentMap['wind_speed_10m'] as num?)?.toDouble() ??
+              (currentMap['windSpeed'] as num?)?.toDouble() ??
+              0,
+          windDirection:
+              (currentMap['wind_direction_10m'] as num?)?.toDouble() ??
+              (currentMap['windDirection'] as num?)?.toDouble() ??
+              0,
+          humidity:
+              (currentMap['relative_humidity_2m'] as num?)?.toDouble() ??
+              (currentMap['humidity'] as num?)?.toDouble() ??
+              0,
+          precipitation: (currentMap['precipitation'] as num?)?.toDouble() ?? 0,
+          surfacePressure:
+              (currentMap['surface_pressure'] as num?)?.toDouble() ??
+              (currentMap['surfacePressure'] as num?)?.toDouble() ??
+              0,
+          cloudCover:
+              (currentMap['cloud_cover'] as num?)?.toDouble() ??
+              (currentMap['cloudCover'] as num?)?.toDouble() ??
+              0,
+          uvIndex:
+              (currentMap['uv_index'] as num?)?.toDouble() ??
+              (currentMap['uvIndex'] as num?)?.toDouble() ??
+              0,
         ),
         hourly: [],
         daily: [],
-        timezone: data['timezone'] ?? 'UTC',
-        lastUpdated: DateTime.parse(data['lastUpdated']),
+        timezone: (data['timezone'] as String?) ?? 'UTC',
+        lastUpdated: DateTime.parse(data['lastUpdated'] as String),
       );
     } catch (e) {
       return null;
@@ -175,4 +228,91 @@ class WeatherRepositoryImpl implements WeatherRepository {
   Future<void> cacheLocation(Location location) async {
     await _hiveService.cacheLocation(location);
   }
+
+  // ── Private serializers ─────────────────────────────────────────────
+
+  Map<String, dynamic> _serializeCurrent(CurrentWeather c) => {
+    'time': c.time.toIso8601String(),
+    'temperature': c.temperature,
+    'apparentTemperature': c.apparentTemperature,
+    'weatherCode': c.weatherCode,
+    'windSpeed': c.windSpeed,
+    'windDirection': c.windDirection,
+    'humidity': c.humidity,
+    'precipitation': c.precipitation,
+    'surfacePressure': c.surfacePressure,
+    'cloudCover': c.cloudCover,
+    'uvIndex': c.uvIndex,
+  };
+
+  CurrentWeather _deserializeCurrent(Map<String, dynamic> m) => CurrentWeather(
+    time: DateTime.parse(m['time'] as String),
+    temperature: (m['temperature'] as num).toDouble(),
+    apparentTemperature: (m['apparentTemperature'] as num).toDouble(),
+    weatherCode: (m['weatherCode'] as num).toInt(),
+    windSpeed: (m['windSpeed'] as num).toDouble(),
+    windDirection: (m['windDirection'] as num).toDouble(),
+    humidity: (m['humidity'] as num).toDouble(),
+    precipitation: (m['precipitation'] as num).toDouble(),
+    surfacePressure: (m['surfacePressure'] as num).toDouble(),
+    cloudCover: (m['cloudCover'] as num).toDouble(),
+    uvIndex: (m['uvIndex'] as num).toDouble(),
+  );
+
+  Map<String, dynamic> _serializeHourly(HourlyWeather h) => {
+    'time': h.time.toIso8601String(),
+    'temperature': h.temperature,
+    'precipitationProbability': h.precipitationProbability,
+    'precipitation': h.precipitation,
+    'windSpeed': h.windSpeed,
+    'windGusts': h.windGusts,
+    'weatherCode': h.weatherCode,
+    'uvIndex': h.uvIndex,
+    'visibility': h.visibility,
+    'humidity': h.humidity,
+  };
+
+  HourlyWeather _deserializeHourly(Map<String, dynamic> m) => HourlyWeather(
+    time: DateTime.parse(m['time'] as String),
+    temperature: (m['temperature'] as num).toDouble(),
+    precipitationProbability: (m['precipitationProbability'] as num).toDouble(),
+    precipitation: (m['precipitation'] as num).toDouble(),
+    windSpeed: (m['windSpeed'] as num).toDouble(),
+    windGusts: (m['windGusts'] as num).toDouble(),
+    weatherCode: (m['weatherCode'] as num).toInt(),
+    uvIndex: (m['uvIndex'] as num).toDouble(),
+    visibility: (m['visibility'] as num).toDouble(),
+    humidity: (m['humidity'] as num).toDouble(),
+  );
+
+  Map<String, dynamic> _serializeDaily(DailyWeather d) => {
+    'time': d.time.toIso8601String(),
+    'weatherCode': d.weatherCode,
+    'temperatureMax': d.temperatureMax,
+    'temperatureMin': d.temperatureMin,
+    'precipitationSum': d.precipitationSum,
+    'precipitationProbabilityMax': d.precipitationProbabilityMax,
+    'windSpeedMax': d.windSpeedMax,
+    'windGustsMax': d.windGustsMax,
+    'sunrise': d.sunrise.toIso8601String(),
+    'sunset': d.sunset.toIso8601String(),
+    'uvIndexMax': d.uvIndexMax,
+    'shortwaveRadiationSum': d.shortwaveRadiationSum,
+  };
+
+  DailyWeather _deserializeDaily(Map<String, dynamic> m) => DailyWeather(
+    time: DateTime.parse(m['time'] as String),
+    weatherCode: (m['weatherCode'] as num).toInt(),
+    temperatureMax: (m['temperatureMax'] as num).toDouble(),
+    temperatureMin: (m['temperatureMin'] as num).toDouble(),
+    precipitationSum: (m['precipitationSum'] as num).toDouble(),
+    precipitationProbabilityMax: (m['precipitationProbabilityMax'] as num)
+        .toDouble(),
+    windSpeedMax: (m['windSpeedMax'] as num).toDouble(),
+    windGustsMax: (m['windGustsMax'] as num).toDouble(),
+    sunrise: DateTime.parse(m['sunrise'] as String),
+    sunset: DateTime.parse(m['sunset'] as String),
+    uvIndexMax: (m['uvIndexMax'] as num).toDouble(),
+    shortwaveRadiationSum: (m['shortwaveRadiationSum'] as num).toDouble(),
+  );
 }

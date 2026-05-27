@@ -1,4 +1,5 @@
 import 'package:equatable/equatable.dart';
+import '../../core/constants/app_sl_constants.dart';
 
 class Location extends Equatable {
   final String id;
@@ -8,6 +9,7 @@ class Location extends Equatable {
   final double latitude;
   final double longitude;
   final bool isGps;
+  final SLDistrict? district;
 
   const Location({
     required this.id,
@@ -17,6 +19,7 @@ class Location extends Equatable {
     required this.latitude,
     required this.longitude,
     this.isGps = false,
+    this.district,
   });
 
   String get displayName {
@@ -26,6 +29,18 @@ class Location extends Equatable {
     return parts.join(', ');
   }
 
+  /// Whether this location is associated with a recognized Sri Lankan district.
+  bool get isSLDistrict => district != null;
+
   @override
-  List<Object?> get props => [id, name, country, admin1, latitude, longitude, isGps];
+  List<Object?> get props => [
+    id,
+    name,
+    country,
+    admin1,
+    latitude,
+    longitude,
+    isGps,
+    district,
+  ];
 }

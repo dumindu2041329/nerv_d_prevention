@@ -3,6 +3,7 @@ import 'package:equatable/equatable.dart';
 import '../../../domain/entities/weather_data.dart';
 import '../../../domain/entities/location.dart';
 import '../../../domain/repositories/weather_repository.dart';
+import '../../../core/constants/app_sl_constants.dart';
 
 part 'weather_event.dart';
 part 'weather_state.dart';
@@ -11,13 +12,58 @@ class WeatherBloc extends Bloc<WeatherEvent, WeatherState> {
   final WeatherRepository _weatherRepository;
 
   WeatherBloc({required WeatherRepository weatherRepository})
-      : _weatherRepository = weatherRepository,
-        super(WeatherInitial()) {
+    : _weatherRepository = weatherRepository,
+      super(WeatherInitial()) {
     on<LoadWeather>(_onLoadWeather);
+    on<LoadWeatherForDistrict>(_onLoadWeatherForDistrict);
     on<_FetchWeatherInBackground>(_onFetchWeatherInBackground);
     on<RefreshWeather>(_onRefreshWeather);
     on<SearchLocations>(_onSearchLocations);
     on<SelectLocation>(_onSelectLocation);
+  }
+
+  Future<void> _onLoadWeatherForDistrict(
+    LoadWeatherForDistrict event,
+    Emitter<WeatherState> emit,
+  ) async {
+    final district = event.district;
+    final location = Location(
+      id: 'district_${district.name}',
+      name: district.displayName,
+      country: 'Sri Lanka',
+      admin1: district.province,
+      latitude: district.center.latitude,
+      longitude: district.center.longitude,
+      district: district,
+    );
+
+    final cached = await _weatherRepository.getCachedWeatherData();
+    if (cached != null) {
+      emit(
+        WeatherLoaded(
+          weatherData: cached,
+          location: location,
+          isStaleCache: true,
+          selectedDistrict: district,
+        ),
+      );
+      add(
+        _FetchWeatherInBackground(
+          location: location,
+          forceRefresh: event.forceRefresh,
+          selectedDistrict: district,
+        ),
+      );
+    } else {
+      emit(WeatherLoading());
+      add(
+        _FetchWeatherInBackground(
+          location: location,
+          forceRefresh: event.forceRefresh,
+          selectedDistrict: district,
+        ),
+      );
+    }
   }
 
   Future<void> _onLoadWeather(
@@ -33,23 +79,32 @@ class WeatherBloc extends Bloc<WeatherEvent, WeatherState> {
       }
     }
 
-    final location = targetLocation ?? const Location(
-      id: 'default',
-      name: 'Colombo',
-      country: 'Sri Lanka',
-      latitude: 6.9271,
-      longitude: 79.8612,
-    );
+    final location =
+        targetLocation ??
+        const Location(
+          id: 'default',
+          name: 'Colombo',
+          country: 'Sri Lanka',
+          latitude: 6.9271,
+          longitude: 79.8612,
+        );
 
     final cached = await _weatherRepository.getCachedWeatherData();
     if (cached != null) {
-      emit(WeatherLoaded(
-        weatherData: cached,
-        location: location,
-        isStaleCache: true,
-      ));
+      emit(
+        WeatherLoaded(
+          weatherData: cached,
+          location: location,
+          isStaleCache: true,
+        ),
+      );
 
-      add(_FetchWeatherInBackground(location: location, forceRefresh: event.forceRefresh));
+      add(
+        _FetchWeatherInBackground(
+          location: location,
+          forceRefresh: event.forceRefresh,
+        ),
+      );
     } else {
       emit(WeatherLoading());
       if (targetLocation == null || targetLocation.isGps) {
@@ -58,9 +113,19 @@ class WeatherBloc extends Bloc<WeatherEvent, WeatherState> {
         if (targetLocation != null) {
           await _weatherRepository.cacheLocation(targetLocation);
         }
-        add(_FetchWeatherInBackground(location: finalLocation, forceRefresh: event.forceRefresh));
+        add(
+          _FetchWeatherInBackground(
+            location: finalLocation,
+            forceRefresh: event.forceRefresh,
+          ),
+        );
       } else {
-        add(_FetchWeatherInBackground(location: location, forceRefresh: event.forceRefresh));
+        add(
+          _FetchWeatherInBackground(
+            location: location,
+            forceRefresh: event.forceRefresh,
+          ),
+        );
       }
     }
   }
@@ -86,19 +151,25 @@ class WeatherBloc extends Bloc<WeatherEvent, WeatherState> {
         forceRefresh: event.forceRefresh,
       );
 
-      emit(WeatherLoaded(
-        weatherData: weatherData,
-        location: location,
-        isStaleCache: false,
-      ));
+      emit(
+        WeatherLoaded(
+          weatherData: weatherData,
+          location: location,
+          isStaleCache: false,
+          selectedDistrict: event.selectedDistrict,
+        ),
+      );
     } catch (e) {
       final currentState = state;
       if (currentState is WeatherLoaded) {
-        emit(WeatherLoaded(
-          weatherData: currentState.weatherData,
-          location: currentState.location,
-          isStaleCache: true,
-        ));
+        emit(
+          WeatherLoaded(
+            weatherData: currentState.weatherData,
+            location: currentState.location,
+            isStaleCache: true,
+            selectedDistrict: currentState.selectedDistrict,
+          ),
+        );
       }
     }
   }
@@ -116,17 +187,23 @@ class WeatherBloc extends Bloc<WeatherEvent, WeatherState> {
           forceRefresh: true,
         );
 
-        emit(WeatherLoaded(
-          weatherData: weatherData,
-          location: currentState.location,
-          isStaleCache: false,
-        ));
+        emit(
+          WeatherLoaded(
+            weatherData: weatherData,
+            location: currentState.location,
+            isStaleCache: false,
+            selectedDistrict: currentState.selectedDistrict,
+          ),
+        );
       } catch (e) {
-        emit(WeatherLoaded(
-          weatherData: currentState.weatherData,
-          location: currentState.location,
-          isStaleCache: true,
-        ));
+        emit(
+          WeatherLoaded(
+            weatherData: currentState.weatherData,
+            location: currentState.location,
+            isStaleCache: true,
+            selectedDistrict: currentState.selectedDistrict,
+          ),
+        );
       }
     }
   }
@@ -137,8 +214,12 @@ class WeatherBloc extends Bloc<WeatherEvent, WeatherState> {
   ) async {
     if (event.query.length < 2) {
       if (state is WeatherLoaded) {
-        emit((state as WeatherLoaded)
-            .copyWith(searchResults: [], isSearching: false));
+        emit(
+          (state as WeatherLoaded).copyWith(
+            searchResults: [],
+            isSearching: false,
+          ),
+        );
       }
       return;
     }
@@ -152,10 +233,9 @@ class WeatherBloc extends Bloc<WeatherEvent, WeatherState> {
       final currentState = state;
 
       if (currentState is WeatherLoaded) {
-        emit(currentState.copyWith(
-          searchResults: locations,
-          isSearching: false,
-        ));
+        emit(
+          currentState.copyWith(searchResults: locations, isSearching: false),
+        );
       }
     } catch (e) {
       if (state is WeatherLoaded) {

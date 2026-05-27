@@ -13,9 +13,14 @@ class HiveService {
     _settingsBox = await Hive.openBox(settingsBox);
   }
 
+  /// Caches complete weather data including current, hourly, and daily
+  /// forecasts, plus a timestamp for staleness checks.
   Future<void> cacheWeatherData(Map<String, dynamic> data) async {
     await _weatherCacheBox.put('weather_data', data);
-    await _weatherCacheBox.put('cache_timestamp', DateTime.now().toIso8601String());
+    await _weatherCacheBox.put(
+      'cache_timestamp',
+      DateTime.now().toIso8601String(),
+    );
   }
 
   Map<String, dynamic>? getCachedWeatherData() {
@@ -61,15 +66,31 @@ class HiveService {
     });
   }
 
+  // ── Settings (generic key-value) ──────────────────────────────────
+
   Future<T?> getSetting<T>(String key) async {
     return _settingsBox.get(key) as T?;
   }
 
-  Future<void> setSetting<T>(String key, T value) async {
+  Future<void> setSetting(String key, dynamic value) async {
     await _settingsBox.put(key, value);
   }
 
   Future<void> removeSetting(String key) async {
     await _settingsBox.delete(key);
+  }
+
+  Future<void> cacheSettings(Map<String, dynamic> data) async {
+    await _settingsBox.putAll(data);
+  }
+
+  Map<String, dynamic>? getSettings() {
+    final keys = _settingsBox.keys;
+    if (keys.isEmpty) return null;
+    final map = <String, dynamic>{};
+    for (final key in keys) {
+      map[key.toString()] = _settingsBox.get(key);
+    }
+    return map;
   }
 }
