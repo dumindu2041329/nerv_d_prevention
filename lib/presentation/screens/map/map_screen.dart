@@ -19,6 +19,7 @@ class _MapScreenState extends State<MapScreen> {
   final MapController _mapController = MapController();
   double _currentZoom = SLMapConstants.initialZoom;
   LatLng _currentCenter = SLMapConstants.center;
+  LatLng? _gpsLocation;
 
   String? _rainviewerPath;
   final DateTime _currentTime = DateTime.now();
@@ -52,88 +53,162 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
-  void _zoomToSriLanka() {
-    _mapController.move(SLMapConstants.center, SLMapConstants.initialZoom);
+  void _zoomToMyLocation() {
+    final target = _gpsLocation ?? SLMapConstants.center;
+    _mapController.move(target, 12.0);
   }
 
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
       create: (_) => getIt<WeatherBloc>()..add(const LoadWeather()),
-      child: Scaffold(
-        backgroundColor: Colors.black,
-        body: Stack(
-          children: [
-            // Full-screen map
-            Positioned.fill(
-              child: FlutterMap(
-                mapController: _mapController,
-                options: MapOptions(
-                  initialCenter: _currentCenter,
-                  initialZoom: _currentZoom,
-                  minZoom: SLMapConstants.minZoom,
-                  maxZoom: SLMapConstants.maxZoom,
-                  onPositionChanged: (position, hasGesture) {
-                    if (hasGesture) {
-                      setState(() {
-                        _currentCenter = position.center;
-                        _currentZoom = position.zoom;
-                      });
-                    }
-                  },
+      child: BlocListener<WeatherBloc, WeatherState>(
+        listener: (context, state) {
+          if (state is WeatherLoaded && state.location != null) {
+            final loc = state.location!;
+            final newLatLng = LatLng(loc.latitude, loc.longitude);
+            if (_gpsLocation == null) {
+              setState(() {
+                _gpsLocation = newLatLng;
+                _currentCenter = newLatLng;
+              });
+              _mapController.move(newLatLng, 12.0);
+            } else if (_gpsLocation != newLatLng) {
+              setState(() {
+                _gpsLocation = newLatLng;
+              });
+            }
+          }
+        },
+        child: Scaffold(
+          backgroundColor: Colors.black,
+          body: Stack(
+            children: [
+              // Full-screen map
+              Positioned.fill(
+                child: FlutterMap(
+                  mapController: _mapController,
+                  options: MapOptions(
+                    initialCenter: _currentCenter,
+                    initialZoom: _currentZoom,
+                    minZoom: SLMapConstants.minZoom,
+                    maxZoom: SLMapConstants.maxZoom,
+                    onPositionChanged: (position, hasGesture) {
+                      if (hasGesture) {
+                        setState(() {
+                          _currentCenter = position.center;
+                          _currentZoom = position.zoom;
+                        });
+                      }
+                    },
+                  ),
+                  children: [
+                    TileLayer(
+                      urlTemplate:
+                          'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
+                      subdomains: const ['a', 'b', 'c', 'd'],
+                      userAgentPackageName: 'com.example.nerv_d_prevention',
+                    ),
+                    _buildRainOverlay(),
+                    _buildUserLocationMarker(),
+                  ],
                 ),
-                children: [
-                  TileLayer(
-                    urlTemplate:
-                        'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
-                    subdomains: const ['a', 'b', 'c', 'd'],
-                    userAgentPackageName: 'com.example.nerv_d_prevention',
-                  ),
-                  _buildRainOverlay(),
-                ],
               ),
-            ),
 
-            // Top: Title + Color Legend
-            Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              child: _buildTopOverlay(context),
-            ),
-
-            // Weather chip (floating, top-left below title)
-            Positioned(
-              left: 16,
-              top: MediaQuery.of(context).padding.top + 80,
-              child: _buildWeatherChip(context),
-            ),
-
-            // Map controls (right side)
-            Positioned(
-              right: 16,
-              top: MediaQuery.of(context).padding.top + 80,
-              child: Column(
-                children: [
-                  _buildMapButton(
-                    Icons.my_location,
-                    'Centre on Sri Lanka',
-                    _zoomToSriLanka,
-                  ),
-                ],
+              // Top: Title + Color Legend
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: _buildTopOverlay(context),
               ),
-            ),
 
-            // Bottom: Time Scrubber
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: _buildTimeScrubber(context),
-            ),
-          ],
+              // Weather chip (floating, top-left below title)
+              Positioned(
+                left: 16,
+                top: MediaQuery.of(context).padding.top + 80,
+                child: _buildWeatherChip(context),
+              ),
+
+              // Map controls (right side)
+              Positioned(
+                right: 16,
+                top: MediaQuery.of(context).padding.top + 80,
+                child: Column(
+                  children: [
+                    _buildMapButton(
+                      Icons.my_location,
+                      'My Location',
+                      _zoomToMyLocation,
+                    ),
+                  ],
+                ),
+              ),
+
+              // Bottom: Time Scrubber
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: _buildTimeScrubber(context),
+              ),
+            ],
+          ),
         ),
       ),
+    );
+  }
+
+  // ── User Location Marker ────────────────────────────────────────────
+
+  Widget _buildUserLocationMarker() {
+    if (_gpsLocation == null) return const SizedBox.shrink();
+    return MarkerLayer(
+      markers: [
+        Marker(
+          width: 36,
+          height: 36,
+          point: _gpsLocation!,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              // Outer pulse ring
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: const Color(0xFF00BCD4).withValues(alpha: 0.12),
+                  border: Border.all(
+                    color: const Color(0xFF00BCD4).withValues(alpha: 0.3),
+                    width: 1.5,
+                  ),
+                ),
+              ),
+              // Inner dot
+              Container(
+                width: 12,
+                height: 12,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: const Color(0xFF00BCD4),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.9),
+                    width: 2,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF00BCD4).withValues(alpha: 0.5),
+                      blurRadius: 6,
+                      spreadRadius: 1,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 

@@ -1,11 +1,12 @@
 # Product Requirements Document
 # NERV Disaster Prevention — Flutter App
 
-**Document Version:** 2.0  
-**Date:** April 24, 2026  
-**Platform:** Flutter (iOS & Android)  
-**Inspired By:** nerv.app/en — Gehirn Inc.  
-**Weather Data Provider:** Open-Meteo API (Free, No API Key Required)
+**Document Version:** 3.0
+**Last Updated:** May 27, 2026
+**Platform:** Flutter (iOS, Android, Web, Windows, macOS, Linux)
+**Inspired By:** nerv.app/en — Gehirn Inc.
+**Weather Data Provider:** AccuWeather API (via backend proxy)
+**Target Region:** Sri Lanka (25 districts, DMC alert types)
 
 ---
 
@@ -13,7 +14,7 @@
 
 1. [Executive Summary](#1-executive-summary)
 2. [Product Vision & Goals](#2-product-vision--goals)
-3. [Target Users & Personas](#3-target-users--personas)
+3. [Target Users & Region](#3-target-users--region)
 4. [Design System](#4-design-system)
    - 4.1 Brand Identity
    - 4.2 Colour Palette
@@ -21,36 +22,36 @@
    - 4.4 Spacing & Grid
    - 4.5 Iconography
    - 4.6 Elevation & Shadows
-   - 4.7 Motion & Animation
-   - 4.8 Component Library
-   - 4.9 Accessibility Tokens
+   - 4.7 Component Library
+   - 4.8 Accessibility Tokens
 5. [Screen Architecture & UI Specifications](#5-screen-architecture--ui-specifications)
    - 5.1 Navigation Structure
    - 5.2 Home Screen
-   - 5.3 Map Screen
+   - 5.3 Map Screen (Rain Radar)
    - 5.4 Timeline Screen
-   - 5.5 Weather Detail Screen
-   - 5.6 Settings Screen
-   - 5.7 Crisis Mapping Screen
-   - 5.8 Notification Detail Screen
+   - 5.5 Weather Screen
+   - 5.6 Menu Screen
+   - 5.7 Settings Screen
+   - 5.8 Weather Detail Screen
 6. [Feature Specifications](#6-feature-specifications)
-7. [Weather API Integration — Open-Meteo](#7-weather-api-integration--open-meteo)
-8. [Flutter Architecture](#8-flutter-architecture)
-9. [Flutter Package Dependencies](#9-flutter-package-dependencies)
-10. [Notification System](#10-notification-system)
-11. [Privacy & Security Requirements](#11-privacy--security-requirements)
-12. [Non-Functional Requirements](#12-non-functional-requirements)
-13. [Accessibility Requirements](#13-accessibility-requirements)
-14. [Release Milestones](#14-release-milestones)
-15. [Open Questions & Risks](#15-open-questions--risks)
+7. [Backend Architecture](#7-backend-architecture)
+8. [Weather Data Pipeline](#8-weather-data-pipeline)
+9. [Flutter Architecture](#9-flutter-architecture)
+10. [Flutter Package Dependencies](#10-flutter-package-dependencies)
+11. [Sri Lanka Localization](#11-sri-lanka-localization)
+12. [Planned Features & Roadmap](#12-planned-features--roadmap)
+13. [Privacy & Security Requirements](#13-privacy--security-requirements)
+14. [Non-Functional Requirements](#14-non-functional-requirements)
+15. [Accessibility Requirements](#15-accessibility-requirements)
+16. [Open Questions & Risks](#16-open-questions--risks)
 
 ---
 
 ## 1. Executive Summary
 
-This PRD defines the complete requirements for a Flutter-based disaster prevention and weather alert mobile application inspired by Japan's NERV Disaster Prevention App. The app delivers real-time weather data, emergency-level alerts, hazard mapping, and community-powered crisis information in a tactical, high-contrast dark UI.
+This PRD defines the complete requirements for a Flutter-based disaster prevention and weather alert mobile application inspired by Japan's NERV Disaster Prevention App. The app delivers real-time weather data, derived emergency-level alerts, rain radar mapping, and a timeline of weather events in a tactical, high-contrast dark UI.
 
-**Weather data** is provided exclusively through the **Open-Meteo API** — a free, open-source, no-API-key-required service delivering forecasts from national weather services worldwide (NOAA, DWD, ECMWF, JMA, MeteoFrance).
+**Weather data** is sourced from **AccuWeather** via a lightweight **Dart Shelf backend proxy** that protects the API key and normalizes responses. The app is localized for **Sri Lanka** with 25 districts, DMC-style disaster alert categories, and monsoon awareness.
 
 The app is designed to function as both an everyday weather companion and an emergency information hub, with an uncompromisingly clean aesthetic and a privacy-first data model.
 
@@ -65,39 +66,40 @@ The app is designed to function as both an everyday weather companion and an eme
 
 | # | Goal | KPI |
 |---|------|-----|
-| G1 | Deliver weather & alerts faster than native OS weather widgets | Time-from-event to notification < 5s |
+| G1 | Deliver weather & derived alerts from AccuWeather data | Alert derivation latency < 5s |
 | G2 | Zero advertisements, zero tracking | No ad SDK in the app bundle |
 | G3 | Fully functional offline for cached data | Core screens load with stale data when offline |
 | G4 | Accessibility-first design | WCAG 2.1 AA compliance |
-| G5 | Minimal battery footprint | Background battery use < 1% per hour |
-| G6 | Open-Meteo free tier compliance | < 10,000 API calls/day with smart caching |
+| G5 | Minimal battery footprint | Efficient caching, minimal background work |
+| G6 | Sri Lanka-focused with district-level weather | 25 districts, 12 major cities |
 
 ---
 
-## 3. Target Users & Personas
+## 3. Target Users & Region
+
+### Region: Sri Lanka
+The app is localized for Sri Lanka with:
+- **25 districts** across 9 provinces (Western, Central, Southern, Northern, Eastern, North Western, North Central, Uva, Sabaragamuwa)
+- **12 major cities** for weather data
+- **6 DMC-aligned disaster alert types**: Flood, Landslide, Cyclone, Lightning, Coastal Warning, Tsunami
+- **Monsoon awareness**: SW Monsoon (May–Sep), NE Monsoon (Dec–Feb), two inter-monsoon periods
 
 ### Persona 1 — "The Daily Commuter" (Primary)
 - Age: 25–45, urban resident
 - Need: Quick glance at rain radar and temperature before leaving home
 - Pain point: Too many weather apps cluttered with ads and irrelevant content
-- Uses: Home screen widget, rain radar, daily forecast
+- Uses: Home screen with map + conditions, rain radar tab
 
 ### Persona 2 — "The Emergency-Aware Resident" (Primary)
-- Age: 30–60, lives in disaster-prone area
-- Need: Immediate push alert for incoming storms, floods, or quakes
-- Pain point: Delayed or missed alerts from standard OS weather
-- Uses: Critical alerts, hazard map, timeline
+- Age: 30–60, lives in disaster-prone area (flood/landslide zones)
+- Need: Immediate awareness of flood, landslide, and cyclone risks
+- Pain point: Delayed or missed alerts from standard sources
+- Uses: Derived alerts on Home screen, Timeline screen
 
 ### Persona 3 — "The Accessibility User" (Secondary)
 - Age: Any, has colour vision deficiency or low vision
 - Need: App that doesn't rely solely on colour for critical info
-- Pain point: Most weather apps use red/green coding only
-- Uses: High-contrast theme, screen reader layout, adjustable text
-
-### Persona 4 — "The Community Contributor" (Secondary)
-- Age: 20–55, tech-savvy, community-minded
-- Need: Ability to post and verify disaster relief locations
-- Uses: Crisis Mapping layer, Watch/subscribe feature
+- Uses: High-contrast theme, screen reader layout, adjustable text, colour vision modes
 
 ---
 
@@ -105,16 +107,14 @@ The app is designed to function as both an everyday weather companion and an eme
 
 ### 4.1 Brand Identity
 
-The visual language is inspired by NERV's tactical operations interface — dark, structured, data-dense, and built for rapid information parsing. The design avoids decorative elements and prioritises legibility and urgency signalling.
+The visual language is inspired by NERV's tactical operations interface — dark, structured, data-dense, and built for rapid information parsing.
 
 **Design Principles:**
 1. **Clarity over decoration** — Every pixel serves information
 2. **Urgency hierarchy** — Colour and size signal severity, not aesthetics
-3. **Night-mode first** — Dark theme is the canonical design; light is secondary
+3. **Night-mode first** — Dark theme is canonical; pure black `#000000` background
 4. **Motion is informative** — Animations signal real-time data changes, not flourishes
 5. **No noise** — No ads, no banners, no promotional elements ever
-
----
 
 ### 4.2 Colour Palette
 
@@ -122,31 +122,29 @@ The visual language is inspired by NERV's tactical operations interface — dark
 
 | Token | Hex | Usage |
 |-------|-----|-------|
-| `color-bg-primary` | `#0A0C10` | Main background, scaffold |
-| `color-bg-surface` | `#12151C` | Cards, panels, bottom sheets |
-| `color-bg-elevated` | `#1A1E29` | Elevated cards, modal backgrounds |
-| `color-bg-overlay` | `#232836` | Map overlays, drawer backgrounds |
-| `color-border-default` | `#2A2F3E` | Card borders, dividers |
-| `color-border-subtle` | `#1E2230` | Subtle separators |
+| `color-bg-primary` | `#000000` | Main background, scaffold |
+| `color-bg-surface` | `#1A1A1A` | Cards, panels, bottom sheets |
+| `color-bg-elevated` | `#252525` | Elevated cards, modal backgrounds |
+| `color-border-default` | `#2A2A2A` | Card borders, dividers |
+| `color-border-subtle` | `#1E1E1E` | Subtle separators |
 
 #### Brand Accent
 
 | Token | Hex | Usage |
 |-------|-----|-------|
-| `color-accent-primary` | `#FF6B00` | Primary CTA, active states, brand accent |
-| `color-accent-secondary` | `#FF9500` | Secondary highlights, hover states |
-| `color-accent-glow` | `#FF6B0033` | Glow effects on accent elements |
+| `color-accent-primary` | `#00BCD4` | Primary CTA, active states, brand accent (cyan/teal) |
+| `color-accent-secondary` | `#00E5FF` | Secondary highlights, hover states |
 
 #### Severity Scale (Critical to Informational)
 
 | Token | Hex | Label | Used For |
 |-------|-----|-------|----------|
-| `color-severity-critical` | `#FF1744` | CRITICAL | Major Tsunami Warning, Extreme Weather |
-| `color-severity-emergency` | `#FF6D00` | EMERGENCY | EEW, High-level Tornado, Major Flooding |
-| `color-severity-warning` | `#FFC400` | WARNING | Weather Warning, Hazard Level 4 |
-| `color-severity-advisory` | `#00E5FF` | ADVISORY | Weather Advisory, Watch |
+| `color-severity-critical` | `#FF1744` | CRITICAL | Tsunami, Extreme Cyclone |
+| `color-severity-emergency` | `#FF6D00` | EMERGENCY | Flood Emergency, Major Landslide |
+| `color-severity-warning` | `#FFC400` | WARNING | Flood Watch, Strong Wind, Thunderstorm |
+| `color-severity-advisory` | `#00E5FF` | ADVISORY | Weather Advisory, UV Hazard, Heavy Rain |
 | `color-severity-info` | `#69F0AE` | INFO | Routine updates, Forecast |
-| `color-severity-calm` | `#42A5F5` | CALM | Clear sky, no alerts |
+| `color-severity-calm` | `#42A5F5` | CALM | Clear sky, no alerts, All Clear |
 
 #### Text Colours
 
@@ -154,9 +152,7 @@ The visual language is inspired by NERV's tactical operations interface — dark
 |-------|-----|-------|
 | `color-text-primary` | `#F0F2F8` | Primary body text, headings |
 | `color-text-secondary` | `#8B95B0` | Secondary labels, captions |
-| `color-text-tertiary` | `#4A5270` | Disabled text, placeholder |
-| `color-text-inverse` | `#0A0C10` | Text on bright backgrounds |
-| `color-text-link` | `#FF9500` | Hyperlinks, tappable text |
+| `color-text-tertiary` | `#5A5A5A` | Disabled text, placeholder |
 
 #### Light Theme Overrides
 
@@ -164,12 +160,13 @@ The visual language is inspired by NERV's tactical operations interface — dark
 |-------|-----|-------|
 | `color-bg-primary` | `#F4F6FA` | Main background |
 | `color-bg-surface` | `#FFFFFF` | Cards, panels |
-| `color-bg-elevated` | `#EEF0F6` | Elevated cards |
 | `color-border-default` | `#D0D5E8` | Card borders |
 | `color-text-primary` | `#0F1120` | Body text |
 | `color-text-secondary` | `#5A6280` | Labels |
 
 #### Colour Vision Accessible Overrides
+
+Implemented in [`AppTheme._getAdjustedSeverityColors()`](lib/core/theme/app_theme.dart:315).
 
 **Protanopia/Deuteranopia (Red–Green):**
 - Replace `color-severity-critical` with `#0072B2` (Blue)
@@ -179,59 +176,42 @@ The visual language is inspired by NERV's tactical operations interface — dark
 - Replace `color-severity-advisory` with `#CC79A7` (Pink)
 - Replace `color-severity-calm` with `#009E73` (Teal)
 
----
-
 ### 4.3 Typography
 
-**Primary Typeface:** `Inter` (open-source, SIL OFL 1.1)  
-**Monospace Typeface:** `JetBrains Mono` (data readouts, countdown timers, coordinates)
+**Primary Typeface:** `Inter` (via `google_fonts` package, loaded at runtime)
 
-```dart
-// pubspec.yaml
-fonts:
-  - family: Inter
-    fonts:
-      - asset: assets/fonts/Inter-Regular.ttf
-      - asset: assets/fonts/Inter-Medium.ttf   weight: 500
-      - asset: assets/fonts/Inter-SemiBold.ttf weight: 600
-      - asset: assets/fonts/Inter-Bold.ttf     weight: 700
-  - family: JetBrainsMono
-    fonts:
-      - asset: assets/fonts/JetBrainsMono-Regular.ttf
-      - asset: assets/fonts/JetBrainsMono-Bold.ttf   weight: 700
-```
+There are no bundled font assets. All fonts are served by the `google_fonts` package. The monospace typeface (`JetBrains Mono`) is **not currently used** in the codebase.
 
 #### Type Scale
 
+Implemented in [`AppTheme._buildTextTheme()`](lib/core/theme/app_theme.dart:203) using Material 3 `TextTheme` with `google_fonts`:
+
 | Token | Size | Weight | Line Height | Usage |
 |-------|------|--------|-------------|-------|
-| `text-display` | 32sp | Bold (700) | 40sp | Alert headlines, major readouts |
-| `text-headline-lg` | 24sp | SemiBold (600) | 32sp | Screen titles |
-| `text-headline-md` | 20sp | SemiBold (600) | 28sp | Section headers, card titles |
-| `text-headline-sm` | 17sp | SemiBold (600) | 24sp | Card sub-headers |
-| `text-body-lg` | 16sp | Regular (400) | 24sp | Primary body content |
-| `text-body-md` | 14sp | Regular (400) | 20sp | Secondary body, descriptions |
-| `text-body-sm` | 12sp | Regular (400) | 18sp | Captions, metadata |
-| `text-label-lg` | 14sp | Medium (500) | 20sp | Button labels, navigation labels |
-| `text-label-sm` | 11sp | Medium (500) | 16sp | Tags, chips, badge text |
-| `text-mono-lg` | 20sp | Bold (700) | 28sp | Countdown timers, temperature readouts |
-| `text-mono-sm` | 13sp | Regular (400) | 18sp | Coordinates, technical data |
+| `displayLarge` | 32sp | Bold (700) | 40/32 | Alert headlines, major readouts |
+| `displayMedium` | 28sp | Bold (700) | 36/28 | Large temp displays |
+| `displaySmall` | 24sp | Bold (700) | 32/24 | - |
+| `headlineLarge` | 24sp | SemiBold (600) | 32/24 | Screen titles |
+| `headlineMedium` | 20sp | SemiBold (600) | 28/20 | Section headers |
+| `headlineSmall` | 17sp | SemiBold (600) | 24/17 | Card sub-headers |
+| `titleLarge` | 16sp | SemiBold (600) | 24/16 | - |
+| `titleMedium` | 14sp | SemiBold (600) | 20/14 | - |
+| `titleSmall` | 12sp | SemiBold (600) | 18/12 | - |
+| `bodyLarge` | 16sp | User-configurable | 24/16 | Primary body |
+| `bodyMedium` | 14sp | User-configurable | 20/14 | Secondary body |
+| `bodySmall` | 12sp | User-configurable | 18/12 | Captions, metadata |
+| `labelLarge` | 14sp | Medium (500) | 20/14 | Button labels |
+| `labelMedium` | 12sp | Medium (500) | 16/12 | - |
+| `labelSmall` | 11sp | Medium (500) | 16/11 | Tags, chips, badge text |
 
-#### Text Size Scale (User-Adjustable)
+#### User-Adjustable Settings
 
-```dart
-enum TextSizeScale { xSmall, small, normal, large, xLarge, xxLarge }
-// Multipliers: 0.75, 0.875, 1.0, 1.125, 1.25, 1.5
-```
+| Setting | Enum | Values |
+|---------|------|--------|
+| Text Size | `TextSizeScale` | xSmall (0.75×), small (0.875×), normal (1.0×), large (1.125×), xLarge (1.25×), xxLarge (1.5×) |
+| Font Weight | `FontWeightScale` | normal (w400), medium (w500), bold (w700) |
 
-#### Font Weight Scale (User-Adjustable)
-
-```dart
-enum FontWeightScale { normal, medium, bold }
-// Maps to: FontWeight.w400, FontWeight.w500, FontWeight.w700
-```
-
----
+Defined in [`lib/core/constants/app_colors.dart`](lib/core/constants/app_colors.dart:80).
 
 ### 4.4 Spacing & Grid
 
@@ -239,222 +219,125 @@ enum FontWeightScale { normal, medium, bold }
 
 | Token | Value | Usage |
 |-------|-------|-------|
-| `space-1` | 4dp | Micro gaps (icon-to-label) |
-| `space-2` | 8dp | Component internal padding (tight) |
-| `space-3` | 12dp | Component internal padding (standard) |
-| `space-4` | 16dp | Card padding, section gaps |
-| `space-5` | 20dp | List item vertical padding |
-| `space-6` | 24dp | Screen horizontal margin |
-| `space-8` | 32dp | Section vertical spacing |
-| `space-10` | 40dp | Large section gaps |
-| `space-12` | 48dp | Bottom nav clearance |
+| `space1` | 4dp | Micro gaps (icon-to-label) |
+| `space2` | 8dp | Component internal padding (tight) |
+| `space3` | 12dp | Component internal padding (standard) |
+| `space4` | 16dp | Card padding, section gaps |
+| `space5` | 20dp | List item vertical padding |
+| `space6` | 24dp | Screen horizontal margin |
+| `space8` | 32dp | Section vertical spacing |
+| `space10` | 40dp | Large section gaps |
+| `space12` | 48dp | Bottom nav clearance |
 
 **Border Radius:**
 
 | Token | Value | Usage |
 |-------|-------|-------|
-| `radius-xs` | 4dp | Tags, chips, small badges |
-| `radius-sm` | 8dp | Buttons, small cards |
-| `radius-md` | 12dp | Standard cards, panels |
-| `radius-lg` | 16dp | Bottom sheets, modal cards |
-| `radius-xl` | 24dp | Hero cards, large panels |
-| `radius-full` | 999dp | Pills, circular elements |
+| `radiusXs` | 4dp | Tags, chips, small badges |
+| `radiusSm` | 8dp | Buttons, small cards |
+| `radiusMd` | 12dp | Standard cards, panels |
+| `radiusLg` | 16dp | Bottom sheets, modal cards |
+| `radiusXl` | 24dp | Hero cards, large panels |
+| `radiusFull` | 999dp | Pills, circular elements |
 
-**Screen Layout:**
-
+**Screen Layout Constants (from [`app_constants.dart`](lib/core/constants/app_constants.dart:13)):**
 ```
-Horizontal margin:  24dp (default), 16dp (compact)
 Content max-width:  600dp (tablet)
 Bottom nav height:  64dp + safe area inset
 Top bar height:     56dp + status bar inset
-Card elevation gap: 12dp between cards
+Min touch target:   48dp
 ```
-
----
 
 ### 4.5 Iconography
 
-**Icon Library:** `Material Symbols` (outlined, weight 200–400 for minimal aesthetic)  
-**Supplementary:** Custom SVG icons for disaster-specific concepts
+**Icon Library:** `Material Symbols` (built-in Material Design icons)
 
-| Icon Purpose | Material Symbol | Custom SVG |
-|-------------|-----------------|------------|
-| Earthquake | `vibration` | — |
-| Tsunami | — | `icon_tsunami.svg` |
-| Volcano | `local_fire_department` | `icon_volcano.svg` |
-| Rain radar | `radar` | — |
-| Typhoon | `cyclone` | — |
-| Lightning | `bolt` | — |
-| Flood/River | `water` | — |
-| Shelter | `emergency_home` | — |
-| J-Alert | `campaign` | — |
-| Crisis Map pin | `location_on` | — |
-| Timeline | `timeline` | — |
-| Watch/Subscribe | `notifications` | — |
-
-**Icon Sizes:**
-
-| Context | Size |
-|---------|------|
-| Navigation bar | 24dp |
-| Card leading icon | 20dp |
-| Alert header icon | 32dp |
-| Critical alert icon | 48dp |
-| Map pin | 36dp |
-
----
+| Icon Purpose | Material Icon |
+|-------------|---------------|
+| Flood | `Icons.water` |
+| Landslide | `Icons.terrain` |
+| Cyclone | `Icons.cyclone` |
+| Lightning | `Icons.bolt` |
+| Coastal Warning | `Icons.beach_access` |
+| Tsunami | `Icons.waves` |
+| Map / Layers | `Icons.layers` |
+| My Location | `Icons.my_location` |
+| Home | `Icons.home` / `Icons.home_outlined` |
+| Timeline | `Icons.fact_check` / `Icons.fact_check_outlined` |
+| Map Tab | `Icons.cloud` / `Icons.cloud_outlined` |
+| Weather Tab | `Icons.wb_sunny` / `Icons.wb_sunny_outlined` |
+| Menu | `Icons.menu` |
 
 ### 4.6 Elevation & Shadows
 
-The dark theme uses **border-based elevation** rather than shadow-based (shadows are invisible on dark backgrounds). Light theme uses standard Material elevation shadows.
+Dark theme uses **border-based elevation** rather than shadow-based (shadows are invisible on dark backgrounds). Light theme uses standard Material elevation shadows.
 
-```dart
-// Dark Theme: border-only elevation
-BoxDecoration cardDecoration(int level) => BoxDecoration(
-  color: level == 0 ? colorBgSurface :
-         level == 1 ? colorBgElevated :
-                      colorBgOverlay,
-  border: Border.all(color: colorBorderDefault, width: 1),
-  borderRadius: BorderRadius.circular(radiusMd),
-);
+Dark theme card: zero elevation, 1px `#2A2A2A` border, 12dp radius.
+Light theme card: elevation 2, 6% opacity shadow, 1px `#D0D5E8` border.
 
-// Light Theme: material elevation + subtle shadow
-BoxShadow lightElevation(int dp) => BoxShadow(
-  color: Colors.black.withOpacity(0.06 * dp),
-  blurRadius: dp * 4.0,
-  offset: Offset(0, dp * 1.5),
-);
-```
+### 4.7 Component Library
 
----
+#### A. Alert Card (Home Screen)
 
-### 4.7 Motion & Animation
+Built inline in [`home_screen.dart`](lib/presentation/screens/home/home_screen.dart:432) as `_buildAlertInfoCard()`:
+- 44dp circle icon with severity colour at 15% opacity
+- Title in 18sp white bold
+- Severity chip with colour-matched background
+- Timestamp, description text (max 3 lines)
+- Chevron right icon
+- Full card is tappable
 
-| Motion Token | Duration | Curve | Usage |
-|-------------|----------|-------|-------|
-| `anim-instant` | 0ms | — | State switches without transition |
-| `anim-fast` | 150ms | `easeOut` | Icon state changes, toggle switches |
-| `anim-standard` | 250ms | `easeInOut` | Card expand/collapse, tab switches |
-| `anim-slow` | 400ms | `easeInOut` | Screen transitions, modal appear |
-| `anim-alert-pulse` | 800ms | `easeInOut` (loop) | Critical alert pulse ring |
-| `anim-radar-sweep` | 2000ms | `linear` (loop) | Radar sweep on map |
-| `anim-countdown` | 1000ms | `linear` (loop) | EEW countdown tick |
+#### B. Current Conditions Chip (Home Screen)
 
-**Reduce Motion:** When the OS "Reduce Motion" accessibility setting is active, all animations collapse to `anim-instant` except critical alert pulses, which use a static high-contrast indicator instead.
+Built inline in [`home_screen.dart`](lib/presentation/screens/home/home_screen.dart:337):
+- 36sp temperature with weather emoji
+- Weather description
+- Feels like, humidity, wind detail row
+- `#1A1A1A` background with subtle border
 
----
+#### C. National/Local Toggle
 
-### 4.8 Component Library
+Reusable widget at [`national_local_toggle.dart`](lib/presentation/widgets/national_local_toggle.dart):
+- Pill toggle: "Island-wide" / "[District Name]"
+- Animated container with 200ms transition
+- `+` button opens district picker bottom sheet
+- 25 Sri Lankan districts, alphabetically sorted, grouped by province
 
-#### A. Alert Banner
+#### D. Bottom Navigation Bar
 
-```
-┌─────────────────────────────────────────┐
-│ [SEVERITY ICON]  ALERT TYPE             │
-│                  Headline text here     │
-│                  Sub-detail line        │
-│                  [HH:MM] • [Location]   │
-└─────────────────────────────────────────┘
-```
+Implemented in [`main_scaffold.dart`](lib/presentation/widgets/main_scaffold.dart):
+- 5 tabs: Home, Timeline, Map, Weather, Menu
+- Height: 64dp + bottom safe area
+- Active: `#00BCD4` (cyan) icon + label
+- Inactive: `#5A5A5A` (tertiary text)
+- Background matches scaffold background
 
-- Background: `color-severity-*` at 15% opacity with left border 4dp solid `color-severity-*`
-- Icon: 32dp, severity colour
-- Headline: `text-headline-sm`, `color-text-primary`
-- Sub-detail: `text-body-sm`, `color-text-secondary`
-- Tap target: entire card → navigates to detail screen
+#### E. Stale Data Banner
 
-#### B. Weather Info Card
-
-```
-┌──────────────────────────────────────┐
-│ [Weather Icon]  24°C    Partly Cloudy│
-│ ─────────────────────────────────────│
-│ Humidity 62%  Wind 12km/h  Rain 0mm  │
-│ ─────────────────────────────────────│
-│ ▼ 7-Day Forecast (chevron)           │
-└──────────────────────────────────────┘
-```
-
-#### C. Countdown Timer Widget
-
-```
-┌───────────────────────────────┐
-│ Earthquake Early Warning      │
-│ ╔════════════════════════╗    │
-│ ║       00:07            ║    │  ← JetBrains Mono, 48sp
-│ ╚════════════════════════╝    │
-│  Seconds until shaking        │
-│  Predicted intensity: Int. 5  │
-└───────────────────────────────┘
-```
-
-- Timer text: `text-mono-lg` at 48sp, `color-severity-emergency`
-- Pulse ring animates at `anim-alert-pulse`
-- Background dims the rest of the app to 40% opacity when active
-
-#### D. Severity Chip
-
-```dart
-Widget severityChip(String label, SeverityLevel level) => Container(
-  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-  decoration: BoxDecoration(
-    color: level.color.withOpacity(0.15),
-    border: Border.all(color: level.color, width: 1),
-    borderRadius: BorderRadius.circular(radiusXs),
-  ),
-  child: Text(label, style: textLabelSm.copyWith(color: level.color)),
-);
-```
-
-#### E. Map Overlay Button (Floating Action Cluster)
-
-```
-         ┌─────┐
-         │ 🗺  │  ← Toggle map layers
-         └─────┘
-         ┌─────┐
-         │ 📍  │  ← My location
-         └─────┘
-         ┌─────┐
-         │ ⚡  │  ← Lightning toggle
-         └─────┘
-```
-
-- 48dp square, `color-bg-elevated`, `radius-sm`
-- Right-aligned, 16dp from screen edge
+At [`stale_data_banner.dart`](lib/presentation/widgets/stale_data_banner.dart):
+- Shows "Last updated: X ago" with refresh icon
+- Accent-coloured background at 10% opacity
 
 #### F. Timeline Event Row
 
-```
-  [Icon] ── [HH:MM] ─────────────────
-           EVENT TYPE                  
-           Location or area detail     
-           [Severity Chip] [Duration]  
-```
+Built inline in [`timeline_screen.dart`](lib/presentation/screens/timeline/timeline_screen.dart:195):
+- Left time column (52dp wide)
+- Timeline line + 36dp circle dot with severity colour
+- Event type label + title
+- "LIFTED" badge for resolved events
+- Date separator pill between groups
 
-#### G. Bottom Navigation Bar
-
-```
-┌─────────────────────────────────────┐
-│  🏠 Home  │  🗺 Map  │ 📋 Timeline │ ⚙ Menu │
-└─────────────────────────────────────┘
-```
-
-- Height: 64dp + bottom safe area
-- Active: `color-accent-primary` icon + label
-- Inactive: `color-text-tertiary`
-- Background: `color-bg-surface` with top border `color-border-default`
-
----
-
-### 4.9 Accessibility Tokens
+### 4.8 Accessibility Tokens
 
 ```dart
-const double minTouchTarget = 48.0;   // minimum tap area
-const double focusRingWidth = 2.0;    // keyboard focus ring width
-const Color focusRingColor = Color(0xFF00E5FF);
-const double minContrastRatio = 4.5;  // WCAG AA
+// From app_constants.dart
+static const double minTouchTarget = 48.0;
+static const double focusRingWidth = 2.0;
+static const Color focusRingColor = Color(0xFF00E5FF);
+static const double minContrastRatio = 4.5;
 ```
+
+Three colour vision modes selectable in Settings: Normal, Protanopia/Deuteranopia, Tritanopia.
 
 ---
 
@@ -463,694 +346,684 @@ const double minContrastRatio = 4.5;  // WCAG AA
 ### 5.1 Navigation Structure
 
 ```
-App Root
-├── Bottom Navigation Bar
-│   ├── [Tab 1] Home
-│   ├── [Tab 2] Map
-│   ├── [Tab 3] Timeline
-│   └── [Tab 4] Settings/Menu
+App Root (MaterialApp.router with GoRouter)
+├── ShellRoute (MainScaffold — Bottom Navigation Bar)
+│   ├── [Tab 1] /home      — HomeScreen
+│   ├── [Tab 2] /timeline  — TimelineScreen
+│   ├── [Tab 3] /map       — MapScreen (Rain Radar)
+│   ├── [Tab 4] /weather   — WeatherScreen
+│   └── [Tab 5] /menu      — MenuScreen
 │
-├── Overlay Screens (push navigation)
-│   ├── Alert Detail Screen
-│   ├── Weather Detail Screen
-│   ├── Crisis Mapping Screen
-│   └── Notification History Screen
+├── Push Route
+│   └── /weather-detail    — WeatherDetailScreen
 │
-└── System Overlays
-    ├── Critical Alert Full-Screen Modal
-    └── Onboarding Flow (first launch)
+└── Modal Routes (bottom sheets)
+    └── District picker (from NationalLocalToggle)
 ```
 
----
+**Router implementation:** [`lib/core/router/app_router.dart`](lib/core/router/app_router.dart)
 
 ### 5.2 Home Screen
 
-**Purpose:** Consolidated at-a-glance view of current weather + active alerts, sorted by urgency.
+**File:** [`lib/presentation/screens/home/home_screen.dart`](lib/presentation/screens/home/home_screen.dart)
+
+**Purpose:** Primary dashboard with interactive map, current conditions, and derived alerts.
 
 **Layout (top to bottom):**
-
 ```
-┌─────────────────────────────────────┐
-│ NERV          [Bell] [Location ▾]   │  ← Top bar (56dp)
-├─────────────────────────────────────┤
-│ ┌───────────────────────────────┐   │
-│ │ 📍 Colombo, Sri Lanka         │   │  ← Location + Current time
-│ │    28°C  ⛅ Partly Cloudy     │   │
-│ │    Feels like 32°C            │   │
-│ │    H: 35° / L: 24°            │   │
-│ └───────────────────────────────┘   │
-│                                     │
-│ ── ACTIVE ALERTS ──────────────────│
-│ [Critical] Heavy Rain Warning ›     │  ← Alert Banner (red/amber)
-│ [Advisory] Coastal Wind Watch ›     │
-│                                     │
-│ ── WEATHER OVERVIEW ───────────────│
-│ [Rain Radar Card]     → ›           │
-│ [Wind Card]           → ›           │
-│ [Humidity/UV Card]    → ›           │
-│                                     │
-│ ── 7-DAY FORECAST ─────────────────│
-│ Mon  ⛅ 35°/24°  Tue  🌧 30°/22°  │
-│ Wed  🌩 27°/21°  Thu  ⛅ 32°/23°  │
-│ ...                                 │
-│                                     │
-│ ── CRISIS MAP NEARBY ──────────────│
-│ [Crisis Map Preview Card]      ›    │
-└─────────────────────────────────────┘
-│  🏠 Home  │  🗺 Map  │ 📋 Timeline │ ⚙ │
-└─────────────────────────────────────┘
+┌────────────────────────────────────────────┐
+│  [ Island-wide ] | [ District ▼ ]    [+]   │  ← NationalLocalToggle
+├────────────────────────────────────────────┤
+│  Join as a Supporter          Learn More › │  ← Supporter banner
+├────────────────────────────────────────────┤
+│  ╔══════════════════════════════════════╗  │
+│  ║        Interactive Map              ║  │  ← 55% of body
+│  ║    (flutter_map + CartoDB dark)     ║  │     Island-wide view
+│  ║         with GPS marker             ║  │     Tap district → zooms
+│  ╚══════════════════════════════════════╝  │
+│     ─── Rainbow gradient separator ───     │
+├────────────────────────────────────────────┤
+│  Island-wide                         45%   │
+│  ⛅ 28.4°C  Partly Sunny            Feels  │  ← Current conditions chip
+│                           Hum 72% Wind 12  │
+│                                            │
+│  ⚠ Colombo — Flood Warning    [WARNING]   │  ← Derived alerts
+│     Heavy rainfall (15.2 mm/h)...      ›   │     sorted by severity
+│  ⚡ Colombo — Lightning Alert  [WARNING]   │
+│  ...                                       │
+└────────────────────────────────────────────┘
+│  🏠 Home │ 📋 Timeline │ ☁ Map │ ☀ Weather │ ☰ │
+└────────────────────────────────────────────┘
 ```
 
 **Behaviour:**
-- Alert banners auto-sort by severity; Critical always first
-- Weather cards auto-refresh every 10 minutes (Open-Meteo polling)
-- Pull-to-refresh triggers an immediate API refresh
-- Active alert count badge on Bell icon in top bar
+- Weather data fetched from AccuWeather via backend proxy
+- Alerts derived from weather thresholds by [`WeatherAlertDeriver`](lib/core/utils/weather_alert_deriver.dart)
+- Map centers on Sri Lanka (7.87°N, 80.77°E) at zoom 7.2
+- District selection zooms map to district center at zoom 10.0
+- Cached data shown immediately; fresh data fetched in background
+- Stale data banner appears when showing cached data
 
----
+### 5.3 Map Screen (Rain Radar)
 
-### 5.3 Map Screen
+**File:** [`lib/presentation/screens/map/map_screen.dart`](lib/presentation/screens/map/map_screen.dart)
 
-**Purpose:** Interactive map with toggleable disaster and weather overlay layers.
+**Purpose:** Full-screen rain radar with time scrubber.
 
 **Layout:**
-
 ```
-┌─────────────────────────────────────┐
-│ [Search bar: "Search location..."]  │
-├─────────────────────────────────────┤
-│                                     │
-│        [Interactive Map]            │
-│        (flutter_map / Mapbox)       │
-│                                     │
-│                       ┌───┐         │
-│                       │ 🗺│ Layers  │
-│                       ├───┤         │
-│                       │ 📍│ Locate  │
-│                       └───┘         │
-├─────────────────────────────────────┤
-│ ← Layer Chips (horizontal scroll) → │
-│ [Rain][Hazard][Crisis][Wind][Temp]  │
-└─────────────────────────────────────┘
+┌────────────────────────────────────────────┐
+│       Rain Radar — Sri Lanka               │  ← Title
+│  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓  ← Color legend│
+│  1    5   10   20   30  50  80  (mm/h)     │
+├────────────────────────────────────────────┤
+│  ⛅ 28°C                                   │  ← Weather chip (top-left)
+│  Colombo                                   │
+│                                    ┌────┐  │
+│        [Interactive Map]           │ ⊙  │  │  ← My Location button
+│    (CartoDB dark + RainViewer      └────┘  │
+│     precipitation overlay)                 │
+│                                            │
+├────────────────────────────────────────────┤
+│  Now  14:30                     [Layers]   │  ← Time scrubber
+│  | | | | | | | | | | | | |                │  ← Time ticks (5-min steps)
+└────────────────────────────────────────────┘
 ```
 
-**Map Layers (toggleable):**
-
-| Layer | Data Source | Update Interval |
-|-------|------------|-----------------|
-| Rain Radar | Open-Meteo precipitation | 10 min |
-| Temperature Grid | Open-Meteo temperature | 1 hour |
-| Wind Speed | Open-Meteo wind | 1 hour |
-| Hazard Zones | Static GeoJSON (cached) | On-demand |
-| Crisis Mapping | User-submitted (real-time) | 5 min |
-| Lightning | Open-Meteo lightning | 1 min |
-
----
+**Data Sources:**
+- **Map tiles:** CartoDB Dark Matter (free, no API key)
+- **Rain overlay:** RainViewer API (free, no API key) — fetches `weather-maps.json`, uses last `past` radar frame
+- **GPS location:** From WeatherBloc state
 
 ### 5.4 Timeline Screen
 
-**Purpose:** Chronological feed of all events in the last 72 hours.
+**File:** [`lib/presentation/screens/timeline/timeline_screen.dart`](lib/presentation/screens/timeline/timeline_screen.dart)
+
+**Purpose:** Chronological feed of derived weather events.
 
 **Layout:**
-
 ```
-┌─────────────────────────────────────┐
-│ Timeline              [Filter ▾]    │
-├─────────────────────────────────────┤
-│ TODAY                               │
-│  │                                  │
-│  ● 14:32  ⚠ Heavy Rain Warning      │
-│  │        Western Province          │
-│  │        [WARNING] Issued          │
-│  │                                  │
-│  ● 11:15  🌊 Coastal Advisory       │
-│  │        [ADVISORY] Issued         │
-│  │                                  │
-│ YESTERDAY                           │
-│  │                                  │
-│  ● 22:44  ⚠ Heavy Rain Warning      │
-│            [WARNING] LIFTED ✓       │
-└─────────────────────────────────────┘
+┌────────────────────────────────────────────┐
+│  [ Island-wide ] | [ District ▼ ]    [+]   │
+├────────────────────────────────────────────┤
+│              ┌──────────┐                  │
+│              │  Today   │                  │  ← Date separator pill
+│              └──────────┘                  │
+│                                            │
+│  14:32  ●  Flood Warning                   │
+│   │        Colombo — Flood Warning         │
+│   │        Heavy rainfall detected...       │
+│   │                                        │
+│  14:32  ●  Lightning Alert                 │
+│   │        Colombo — Lightning Alert       │
+│   │        Thunderstorm activity...         │
+│   │                                        │
+│              ┌──────────────┐              │
+│              │  Tomorrow    │              │
+│              └──────────────┘              │
+│                                            │
+│  00:00  ●  Heavy Rain Forecast             │
+│            Colombo — Heavy Rain...         │
+└────────────────────────────────────────────┘
 ```
 
-**Filter Options:** All / Earthquakes / Tsunami / Weather / Volcanic / J-Alert / Crisis Map
+**Behaviour:**
+- Events derived from [`WeatherAlertDeriver.deriveTimelineEvents()`](lib/core/utils/weather_alert_deriver.dart:213)
+- Grouped by date (Today, Tomorrow, [Weekday] M/D)
+- Timeline line connects events within each date group
+- Severity-coloured circle dots
+- "LIFTED" badge for resolved events
+- District toggle filters events
 
----
+### 5.5 Weather Screen
 
-### 5.5 Weather Detail Screen
+**File:** [`lib/presentation/screens/weather/weather_screen.dart`](lib/presentation/screens/weather/weather_screen.dart)
 
-**Purpose:** Full expanded view of weather data for a location.
+**Purpose:** Detailed weather view with draggable sheet over a map.
+
+**Layout:**
+```
+┌────────────────────────────────────────────┐
+│  [ Island-wide ] | [ District ▼ ]    [+]   │
+│                                            │
+│        [Map Background — CartoDB dark]     │
+│                                            │
+│  ┌────────────────────────────────────┐    │
+│  │  ━━━━━━  ← drag handle             │    │
+│  │                                    │    │
+│  │  Colombo Weather                   │    │
+│  │  2026/05/27 (Tue)                  │    │
+│  │  ─────────────────────────────     │    │
+│  │                                    │    │
+│  │  ⛅  28.4°C                        │    │
+│  │      Partly Sunny                  │    │
+│  │                                    │    │
+│  │  Feels Like │ Humidity            │    │
+│  │  32.1°C     │ 72%                 │    │
+│  │  Wind       │ Pressure            │    │
+│  │  12.5 km/h  │ 1013 hPa            │    │
+│  │  UV Index   │ Cloud Cover         │    │
+│  │  8.2        │ 45%                 │    │
+│  │                                    │    │
+│  │  Hourly Forecast        12 hours   │    │
+│  │  [14:00] [15:00] [16:00] ...      │    │
+│  │  ─────────────────────────────     │    │
+│  │                                    │    │
+│  │  5-Day Forecast                    │    │
+│  │  Today    ⛅  24° ━━━━ 35°         │    │
+│  │  Tomorrow ⛅  23° ━━━━ 30°         │    │
+│  │  Wed      🌧  22° ━━━━ 27°         │    │
+│  │  ...                               │    │
+│  └────────────────────────────────────┘    │
+└────────────────────────────────────────────┘
+```
+
+**Behaviour:**
+- `DraggableScrollableSheet` (0.45 initial, 0.15 min, 0.85 max)
+- Map background re-centers on district selection
+- Current conditions: 56sp temperature, 2×2 detail grid
+- Hourly forecast: horizontal scroll strip, 72dp-wide chips
+- 5-day forecast: rows with day label, emoji, precipitation %, temp range bar
+- Temp range bar: cyan (#00BCD4) to orange (#FF6B00) gradient
+
+### 5.6 Menu Screen
+
+**File:** [`lib/presentation/screens/menu/menu_screen.dart`](lib/presentation/screens/menu/menu_screen.dart)
+
+**Purpose:** Combined menu with saved regions, supporters club, settings shortcuts, and about section.
 
 **Sections:**
-1. Current conditions hero (temperature, icon, feels-like, UV, humidity, wind)
-2. Hourly forecast (horizontal scroll, 24 hours, Chart with precipitation probability)
-3. 7-day forecast list
-4. Rain radar mini-map (tappable → full Map screen on Rain layer)
-5. Sunrise/Sunset card
-6. Wind speed/direction rose
-7. JMA synoptic chart (static image, updated every 6h)
+1. Title "Menu" + rainbow gradient stripe
+2. **Saved Regions** — Shows "0 / 3" counter, "Add" button (cyan `#00BCD4`)
+3. **Supporters' Club Membership Card** — Hero card with NERV branding, dark red overlay
+4. **Settings** — Menu items: Language (English), Appearance, Notifications, Widget Settings
+5. **About this app** — Version (1.0.0), News, Remarks, Terms of Service, Privacy Policy, License Information, Contact Us
+6. **Footer** — "ゲヒルン危機管理局" + "In Collaboration with @UN_NERV"
 
----
+### 5.7 Settings Screen
 
-### 5.6 Settings Screen
+**File:** [`lib/presentation/screens/settings/settings_screen.dart`](lib/presentation/screens/settings/settings_screen.dart)
+
+**Purpose:** Accessibility settings and notification preferences.
 
 **Sections:**
+1. **Header** — "Settings" title
+2. **Accessibility** — Dark Mode toggle, Text Size selector (6 options), Font Weight selector (3 options), Colour Vision selector (3 modes), Contrast selector (3 levels)
+3. **Notifications** — 7 toggles: Critical Alerts, Flood Alerts, Landslide Alerts, Cyclone Advisories, Lightning Alerts, Coastal Warnings, Tsunami Bulletins
+4. **About** — About NERV dialog, Privacy Policy, Terms of Service
+5. **Footer** — "NERV — Sri Lanka", Version 1.0.0, "Weather data: Open-Meteo" (legacy text), "Alerts: DMC Sri Lanka"
 
-```
-┌─────────────────────────────────────┐
-│ ← Settings                          │
-├─────────────────────────────────────┤
-│ REGISTERED LOCATIONS                │
-│ [+] Add location      [My GPS ✓]    │
-│ ┌──────────────────────────────┐    │
-│ │ 📍 Colombo                   │    │
-│ │ 📍 Kandy              [×]    │    │
-│ └──────────────────────────────┘    │
-│                                     │
-│ APPEARANCE                          │
-│ Theme          [Dark ●] [Light ○]   │
-│ Colour Vision  [Normal] [P/D] [T]   │
-│ Contrast       [Low] [Normal] [High]│
-│ Font Size       ───●────────────    │
-│ Font Weight    [Normal] [Med] [Bold]│
-│ Screen Reader   OFF ●               │
-│                                     │
-│ NOTIFICATIONS                       │
-│ Critical Alerts  ●                  │
-│ Earthquake       ●                  │
-│ Tsunami          ●                  │
-│ Weather Warning  ●                  │
-│ Hazard Level     ●                  │
-│ J-Alert          ●                  │
-│                                     │
-│ TEST NOTIFICATION                   │
-│ [Send Test Alert]                   │
-│                                     │
-│ LANGUAGE         EN ● │ JA ○        │
-│                                     │
-│ ABOUT / PRIVACY POLICY              │
-└─────────────────────────────────────┘
-```
+All selectors use modal bottom sheets with checkmark on selected item.
 
----
+### 5.8 Weather Detail Screen
 
-### 5.7 Crisis Mapping Screen
+**File:** [`lib/presentation/screens/weather_detail/weather_detail_screen.dart`](lib/presentation/screens/weather_detail/weather_detail_screen.dart)
 
-**Purpose:** Community-contributed disaster relief POI map.
+**Purpose:** Full expanded view (currently uses hardcoded/placeholder data).
 
-**Layout:** Full-screen map with floating bottom sheet listing nearby POIs.
-
-**Bottom Sheet (collapsed):**
-```
-── Crisis Map ─────────── ↑ Pull up
-📍 6 points within 5km
-[Shelter] [Water] [Toilet] [Road] [All]
-```
-
-**Bottom Sheet (expanded):**
-```
-┌──────────────────────────────────┐
-│ 🏠 Colombo North Evacuation Ctr  │
-│    0.8km away · Updated 2h ago   │
-│    Capacity: 250 | Open ✓        │
-│    [Watch] [Get Directions]      │
-├──────────────────────────────────┤
-│ 💧 Water Distribution — Pettah   │
-│    1.2km away · Posted 4h ago    │
-│    [Watch] [Get Directions]      │
-└──────────────────────────────────┘
-```
-
----
-
-### 5.8 Notification Detail Screen
-
-Full-page detail view triggered by tapping any push notification or alert banner.
-
-**Content:**
-- Severity badge + event type headline
-- Affected area map (mini-map, not interactive)
-- Issued time / Expiry time
-- Detailed description text
-- Recommended actions list
-- Share button (system share sheet)
+**Sections:**
+1. Current conditions hero (gradient background, 72sp emoji, temperature, condition items)
+2. Hourly forecast chart (fl_chart LineChart, 7 data points)
+3. 7-Day forecast list (hardcoded)
+4. Sunrise & Sunset card
+5. Wind details card (Direction, Speed, Gusts)
 
 ---
 
 ## 6. Feature Specifications
 
-### F-01 Earthquake Early Warning (EEW)
+### F-01 Weather Alert Derivation
 
-| Field | Spec |
-|-------|------|
-| Trigger | Simulated via periodic Open-Meteo seismic API (for production: integrate USGS GeoJSON feed) |
-| Alert Type | Critical Alert (bypasses Do Not Disturb) |
-| UI | Full-screen takeover modal with pulsing red border, countdown timer (JetBrains Mono), predicted intensity chip |
-| Countdown | S-wave arrival countdown in seconds, tick every 1 second |
-| Dismissal | Auto-dismisses after countdown reaches 0 + 10 seconds; manual dismiss available |
-| REQ | EEW-01: Must function even when app is in background |
+Alerts are derived from live AccuWeather data by [`WeatherAlertDeriver`](lib/core/utils/weather_alert_deriver.dart).
+
+**Thresholds:**
+
+| Alert Type | Condition | Severity |
+|------------|-----------|----------|
+| Flood Emergency | Precipitation ≥ 15 mm/h | EMERGENCY |
+| Flood Watch | Precipitation ≥ 5 mm/h | WARNING |
+| Heavy Rain Advisory | Precipitation ≥ 1 mm/h AND probability ≥ 50% | ADVISORY |
+| Cyclone Advisory | Wind speed ≥ 50 km/h | EMERGENCY |
+| Strong Wind Alert | Wind speed ≥ 30 km/h | WARNING |
+| Lightning Alert | Thunderstorm weather codes (14–18, 40–44) | WARNING |
+| Coastal Warning | Wind ≥ 30 km/h AND precipitation probability ≥ 40% | WARNING |
+| UV Hazard Advisory | UV Index ≥ 8.0 | ADVISORY |
+| Landslide Watch | Cloud cover ≥ 90% AND precipitation ≥ 1 mm/h | WARNING |
+| All Clear | No hazardous conditions | CALM |
+
+**Features:**
+- Alerts sorted by severity (most severe first)
+- Per-district alert context when a district is selected
+- Timeline events derived from both current conditions and 5-day daily forecast
+- Daily forecast alerts include "Tomorrow" / "Day N" labels
 
 ### F-02 Rain Radar
 
 | Field | Spec |
 |-------|------|
-| Data | Open-Meteo Forecast API: `hourly=precipitation,precipitation_probability` |
-| Range | ±1 hour historical, up to 15 hours forecast |
-| Refresh | Every 10 minutes |
-| UI | Colour gradient overlay on map (blue→cyan→yellow→red scale) |
-| REQ | RADAR-01: Cached last result must display offline |
+| Data | RainViewer public API (`api.rainviewer.com/public/weather-maps.json`) |
+| Overlay | Tile layer from `tilecache.rainviewer.com` |
+| Refresh | On screen init |
+| UI | Full-screen map with colour legend (blue→cyan→yellow→orange→red→magenta), time scrubber with 5-min ticks |
+| File | [`map_screen.dart`](lib/presentation/screens/map/map_screen.dart) |
 
 ### F-03 Weather Forecasts
 
 | Field | Spec |
 |-------|------|
-| Current | `current=temperature_2m,apparent_temperature,weather_code,wind_speed_10m,wind_direction_10m,relative_humidity_2m,precipitation` |
-| Hourly | `hourly=temperature_2m,precipitation_probability,precipitation,wind_speed_10m,uv_index` |
-| Daily | `daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max,sunrise,sunset,uv_index_max` |
-| Forecast Range | 16 days (daily), 7 days shown in UI |
-| Refresh | Every 60 minutes (hourly model updates) |
+| Current | Temperature, apparent temperature, weather icon, wind speed/direction, humidity, precipitation, pressure, cloud cover, UV index |
+| Hourly | 12 hours from AccuWeather (temperature, precip probability, precip, wind, gusts, weather code, UV, visibility, humidity) |
+| Daily | 5 days from AccuWeather (weather code, temp max/min, precip sum, precip probability max, wind max, gusts max, sunrise, sunset, UV max) |
+| Refresh | Cache TTL: 10 min (current), 1 hour (hourly), 3 hours (daily) |
 
-### F-04 Push Notifications (Weather Alerts)
+### F-04 Weather Code Mapping
 
-| Event | Threshold | Priority |
-|-------|-----------|----------|
-| Heavy Rain | precipitation > 20mm/hr | High (sound) |
-| Extreme Rain | precipitation > 50mm/hr | Critical (override silent) |
-| High Wind | wind_speed > 60km/h | High |
-| Storm | weather_code in [95,96,99] | Critical |
-| UV Extreme | uv_index > 10 | Normal |
-| Flash Flood | Open-Meteo Flood API: discharge spike | Critical |
+Uses **AccuWeather icon codes** (1–47), not WMO codes. Defined in [`weather_codes.dart`](lib/core/constants/weather_codes.dart).
 
-### F-05 Crisis Mapping
+### F-05 Timeline
 
 | Field | Spec |
 |-------|------|
-| Post Types | Shelter, Water, Toilet (accessible flag), Road condition, Waste, Relief Supply |
-| Geo-fence | Posts restricted to within 10km of device GPS |
-| Auth | Supporters' Club member flag (local persisted token) |
-| Moderation | Flag button on each pin; flagged items reviewed |
-| Translation | libretranslate or on-device ML Kit translation (EN↔target language) |
-| Watch | Subscribe to pin updates; local notification when pin is edited/deleted |
-
-### F-06 Timeline
-
-| Field | Spec |
-|-------|------|
-| Duration | 72 hours of events |
-| Storage | SQLite (drift package) — persisted locally |
-| Event Types | Weather alerts, earthquakes, crisis map updates, user actions |
-| Grouping | Date sections; most recent first |
-| Filter | By event type (chip filter row) |
-
-### F-07 Widgets
-
-| Platform | Widget | Content |
-|----------|--------|---------|
-| iOS 16+ | Lock screen (small) | Current temp + weather icon |
-| iOS | Home screen (medium) | Temp, condition, 3-hour forecast |
-| Android | Home screen | Temp, condition, rain probability |
-| Implementation | `home_widget` Flutter package | — |
+| Duration | Events derived from current + 5-day forecast |
+| Storage | In-memory (derived on-the-fly from WeatherBloc state) |
+| Event Types | Flood, Landslide, Cyclone, Lightning, Coastal Warning, Tsunami |
+| Grouping | Date sections (Today, Tomorrow, [Weekday] M/D) |
+| File | [`timeline_screen.dart`](lib/presentation/screens/timeline/timeline_screen.dart) |
 
 ---
 
-## 7. Weather API Integration — Open-Meteo
+## 7. Backend Architecture
 
-### 7.1 Why Open-Meteo
+The app uses a **Dart Shelf backend proxy** to protect the AccuWeather API key and avoid exposing it in the client.
 
-| Criterion | Open-Meteo |
-|-----------|-----------|
-| API key required | ❌ No |
-| Cost (non-commercial) | Free |
-| Rate limit | 10,000 calls/day, 5,000/hour, 600/min |
-| Response time | < 10ms (CDN-backed) |
-| Flutter SDK | `open_meteo` package (pub.dev) |
-| Data freshness | Hourly model updates |
-| Coverage | Global (NOAA, ECMWF, DWD, JMA, MeteoFrance) |
-| Historical data | 80+ years |
-| Uptime | 99.9% SLA |
-| License | CC BY 4.0 (attribution required) |
+**File:** [`backend/lib/server.dart`](backend/lib/server.dart)
 
-### 7.2 API Endpoints Used
+### Architecture
 
-#### Forecast API (Primary)
 ```
-GET https://api.open-meteo.com/v1/forecast
+Flutter App ──→ Shelf Backend (localhost:8080) ──→ AccuWeather API
+                     │
+                     └── .env file (ACCUWEATHER_API_KEY)
 ```
 
-**Required Parameters:**
-```
-latitude={lat}&longitude={lon}
-&current=temperature_2m,apparent_temperature,weather_code,
-          wind_speed_10m,wind_direction_10m,relative_humidity_2m,
-          precipitation,surface_pressure,cloud_cover,uv_index
-&hourly=temperature_2m,precipitation_probability,precipitation,
-        wind_speed_10m,wind_gusts_10m,weather_code,uv_index,
-        visibility,relative_humidity_2m
-&daily=weather_code,temperature_2m_max,temperature_2m_min,
-       apparent_temperature_max,apparent_temperature_min,
-       precipitation_sum,precipitation_probability_max,
-       wind_speed_10m_max,wind_gusts_10m_max,
-       sunrise,sunset,uv_index_max,shortwave_radiation_sum
-&timezone=auto
-&forecast_days=7
-&wind_speed_unit=kmh
-&precipitation_unit=mm
-```
+### Endpoints
 
-**Example Response (partial):**
-```json
-{
-  "current": {
-    "time": "2026-04-24T14:00",
-    "temperature_2m": 28.4,
-    "apparent_temperature": 32.1,
-    "weather_code": 3,
-    "wind_speed_10m": 12.5,
-    "wind_direction_10m": 220,
-    "relative_humidity_2m": 72,
-    "precipitation": 0.0,
-    "uv_index": 8.2
-  },
-  "hourly": { "time": [...], "temperature_2m": [...], ... },
-  "daily": { "time": [...], "temperature_2m_max": [...], ... }
-}
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | `/health` | Health check |
+| GET | `/location/<query>` | City search |
+| GET | `/geoposition/<lat>/<lon>` | GPS → location key |
+| GET | `/current/<locationKey>` | Current conditions |
+| GET | `/hourly/<locationKey>` | 12-hour forecast |
+| GET | `/daily/<locationKey>` | 5-day forecast |
+
+### Dependencies
+
+```yaml
+# backend/pubspec.yaml
+shelf: ^1.4.1
+shelf_router: ^1.1.4
+shelf_cors_headers: ^0.1.5
+dio: ^5.4.0
+dotenv: ^4.2.0
 ```
 
-#### Geocoding API (Location Search)
-```
-GET https://geocoding-api.open-meteo.com/v1/search?name={query}&count=5&language=en
-```
+### How to Start
 
-#### Air Quality API (UV + Pollution)
-```
-GET https://air-quality-api.open-meteo.com/v1/air-quality
-?latitude={lat}&longitude={lon}
-&hourly=us_aqi,pm2_5,pm10,uv_index,uv_index_clear_sky
+```bash
+cd backend
+dart pub get
+dart run lib/server.dart
 ```
 
-#### Flood API (River discharge — crisis alerts)
-```
-GET https://flood-api.open-meteo.com/v1/flood
-?latitude={lat}&longitude={lon}
-&daily=river_discharge
-&forecast_days=7
-```
-
-#### Historical Weather API (Timeline context)
-```
-GET https://archive-api.open-meteo.com/v1/archive
-?latitude={lat}&longitude={lon}
-&start_date={date-3d}&end_date={today}
-&hourly=temperature_2m,precipitation,weather_code
-```
-
-### 7.3 Caching Strategy
-
-```dart
-// Cache TTLs
-const currentWeatherTTL    = Duration(minutes: 10);
-const hourlyForecastTTL    = Duration(hours: 1);
-const dailyForecastTTL     = Duration(hours: 3);
-const airQualityTTL        = Duration(hours: 1);
-const floodDataTTL         = Duration(hours: 6);
-const geocodingTTL         = Duration(days: 7);   // location rarely changes
-```
-
-**Cache Implementation:** `hive` (NoSQL local storage) + `dio_cache_interceptor`
-
-```dart
-// Dio + cache interceptor setup
-final cacheStore = HiveCacheStore('./hive_cache');
-final cachePolicy = CachePolicy.forceCache;
-
-final dio = Dio()
-  ..interceptors.add(
-    DioCacheInterceptor(options: CacheOptions(
-      store: cacheStore,
-      policy: CachePolicy.refreshForceCache,
-      maxStale: const Duration(hours: 6), // serve stale if offline
-    )),
-  );
-```
-
-### 7.4 API Call Budget
-
-| API Call Type | Frequency | Daily Calls (1 user) | 1000 Users |
-|--------------|-----------|----------------------|------------|
-| Current weather | Every 10 min | 144 | 144,000 |
-| Hourly forecast | Every 1 hour | 24 | 24,000 |
-| Daily forecast | Every 3 hours | 8 | 8,000 |
-| Air quality | Every 1 hour | 24 | 24,000 |
-| Geocoding | On search | ~2 | ~2,000 |
-
-> **Budget Note:** For >100 users sharing a backend, implement a **server-side proxy** that calls Open-Meteo once per location per TTL window and caches the response — reducing calls to Open-Meteo by 95%+ while keeping the app free for end-users. For commercial use, upgrade to Open-Meteo's paid API (from ~$20/month).
-
-### 7.5 Weather Code Mapping
-
-Open-Meteo uses WMO Weather Code (WW) standard:
-
-| Code | Description | App Icon | Severity |
-|------|-------------|----------|----------|
-| 0 | Clear sky | ☀️ | Calm |
-| 1–3 | Partly cloudy | ⛅ | Calm |
-| 45–48 | Fog | 🌫️ | Advisory |
-| 51–55 | Drizzle | 🌦️ | Info |
-| 61–65 | Rain | 🌧️ | Info |
-| 71–75 | Snow | 🌨️ | Info |
-| 80–82 | Rain showers | 🌧️ | Advisory |
-| 85–86 | Snow showers | 🌨️ | Advisory |
-| 95 | Thunderstorm | ⛈️ | Warning |
-| 96–99 | Thunderstorm + hail | ⛈️ | Emergency |
+See [`How to start.md`](How to start.md) for full instructions.
 
 ---
 
-## 8. Flutter Architecture
+## 8. Weather Data Pipeline
 
-### 8.1 Architecture Pattern: Clean Architecture + BLoC
+### Data Flow
+
+```
+AccuWeather API
+     │
+     ▼
+Shelf Backend (API key stored in .env)
+     │  ┌─ /geoposition → location key
+     │  ├─ /current      → current conditions (AccuWeather icon codes)
+     │  ├─ /hourly       → 12-hour forecast
+     │  └─ /daily        → 5-day forecast
+     ▼
+AccuWeatherClient (Dio HTTP client)
+     │
+     ▼
+WeatherRepositoryImpl
+     │  ├─ Cache check (Hive, 10-min TTL)
+     │  ├─ Fetch + parse + cache on miss
+     │  └─ Legacy cache deserialization fallback
+     ▼
+WeatherBloc
+     │  ├─ WeatherInitial → LoadWeather/LoadWeatherForDistrict
+     │  ├─ WeatherLoading → show spinner
+     │  ├─ WeatherLoaded  → current + hourly + daily + location
+     │  └─ WeatherError   → show error with stale cache
+     ▼
+HomeScreen / WeatherScreen / MapScreen / TimelineScreen
+     │
+     ▼
+WeatherAlertDeriver (threshold-based alert + timeline event derivation)
+```
+
+### Caching Strategy
+
+```dart
+// From app_constants.dart
+static const Duration currentWeatherCacheTtl = Duration(minutes: 10);
+static const Duration hourlyForecastCacheTtl = Duration(hours: 1);
+static const Duration dailyForecastCacheTtl = Duration(hours: 3);
+```
+
+**Cache Implementation:** `Hive` via [`HiveService`](lib/data/local/hive/hive_service.dart).
+
+Two Hive boxes:
+- `weather_cache` — Current + hourly + daily weather data + timestamp + cached location
+- `settings` — User preferences (dark mode, text size, colour vision, contrast, saved locations)
+
+The repository includes backward-compatible legacy cache deserialization (`_tryLegacyCacheDeserialize`) for older cache formats that used Open-Meteo-style key names.
+
+---
+
+## 9. Flutter Architecture
+
+### 9.1 Architecture Pattern: Clean Architecture + BLoC (Simplified)
+
+The codebase follows a simplified Clean Architecture with BLoC state management. There is **no `usecases` layer** — BLoCs call repositories directly.
 
 ```
 lib/
 ├── core/
-│   ├── constants/        # colours, typography, spacing tokens
-│   ├── theme/            # ThemeData, dark/light/accessible themes
-│   ├── router/           # GoRouter route definitions
-│   ├── di/               # get_it service locator
-│   └── utils/            # formatters, extensions, helpers
+│   ├── constants/
+│   │   ├── app_colors.dart        # SeverityLevel, ColourVisionMode, ContrastMode, TextSizeScale, FontWeightScale enums
+│   │   ├── app_constants.dart     # ApiConstants, AppConstants
+│   │   ├── app_sl_constants.dart  # Sri Lanka: 25 districts, 6 alert types, 12 cities, map bounds, monsoons
+│   │   ├── app_spacing.dart       # Spacing and border radius tokens
+│   │   ├── constants.dart         # Barrel export
+│   │   └── weather_codes.dart     # AccuWeather icon code → description/emoji mapping
+│   ├── di/
+│   │   ├── di.dart                # Barrel export
+│   │   └── injection.dart         # get_it service locator setup
+│   ├── router/
+│   │   ├── app_router.dart        # GoRouter with ShellRoute for 5 tabs + push route
+│   │   └── router.dart            # Barrel export
+│   ├── theme/
+│   │   ├── app_theme.dart         # darkTheme() + lightTheme() + colour vision overrides
+│   │   └── theme.dart             # Barrel export
+│   └── utils/
+│       ├── date_time_utils.dart   # DateTime formatting helpers
+│       ├── string_utils.dart      # Temperature, wind, precipitation formatting
+│       ├── utils.dart             # Barrel export
+│       └── weather_alert_deriver.dart  # Threshold-based alert + timeline event derivation
 │
 ├── data/
-│   ├── remote/
-│   │   ├── open_meteo/   # OpenMeteo API client (dio)
-│   │   └── crisis_map/   # Crisis mapping REST client
 │   ├── local/
-│   │   ├── hive/         # Hive boxes (weather cache, settings)
-│   │   └── drift/        # SQLite database (timeline, crisis pins)
-│   └── repositories/     # Implementations of domain repo interfaces
+│   │   └── hive/
+│   │       └── hive_service.dart  # Hive box management (weather_cache, settings)
+│   ├── remote/
+│   │   └── accuweather/
+│   │       └── accuweather_client.dart  # Dio client for backend proxy + response models
+│   └── repositories/
+│       ├── weather_repository_impl.dart  # WeatherRepository implementation with caching
+│       └── settings_repository_impl.dart # SettingsRepository implementation with Hive
 │
 ├── domain/
-│   ├── entities/         # WeatherData, Alert, CrisisPin, TimelineEvent
-│   ├── repositories/     # Abstract repo interfaces
-│   └── usecases/         # GetCurrentWeather, GetForecast, PostCrisisPin...
+│   ├── entities/
+│   │   ├── weather_data.dart      # WeatherData, CurrentWeather, HourlyWeather, DailyWeather
+│   │   ├── alert.dart             # Alert entity
+│   │   ├── location.dart          # Location entity with district field
+│   │   ├── timeline_event.dart    # TimelineEvent entity
+│   │   ├── crisis_pin.dart        # CrisisPin entity + CrisisPinType enum (defined, not yet used)
+│   │   └── entities.dart          # Barrel export
+│   └── repositories/
+│       ├── weather_repository.dart    # Abstract WeatherRepository
+│       ├── settings_repository.dart   # Abstract SettingsRepository
+│       └── repositories.dart          # Barrel export
 │
 ├── presentation/
-│   ├── blocs/            # WeatherBloc, AlertBloc, CrisisMapBloc, SettingsBloc
+│   ├── blocs/
+│   │   ├── weather/
+│   │   │   └── weather_bloc.dart  # WeatherBloc + WeatherEvent + WeatherState (part files)
+│   │   └── settings/
+│   │       └── settings_bloc.dart  # SettingsBloc + SettingsEvent + SettingsState (part files)
 │   ├── screens/
 │   │   ├── home/
+│   │   │   └── home_screen.dart   # Map + conditions + derived alerts
 │   │   ├── map/
+│   │   │   └── map_screen.dart    # Rain radar with RainViewer overlay
 │   │   ├── timeline/
+│   │   │   └── timeline_screen.dart  # Chronological event feed
+│   │   ├── weather/
+│   │   │   └── weather_screen.dart   # Draggable sheet + weather details
 │   │   ├── weather_detail/
-│   │   ├── crisis_map/
-│   │   └── settings/
-│   └── widgets/          # Shared reusable widgets (AlertBanner, WeatherCard...)
+│   │   │   └── weather_detail_screen.dart  # Full weather detail (placeholder data)
+│   │   ├── settings/
+│   │   │   └── settings_screen.dart  # Accessibility + notifications
+│   │   └── menu/
+│   │       └── menu_screen.dart   # Combined menu with supporters club + about
+│   └── widgets/
+│       ├── alert_banner.dart      # Reusable AlertBanner widget
+│       ├── forecast_card.dart     # Daily forecast card with temp bars
+│       ├── location_search_widget.dart  # Search bottom sheet with debounce + GPS option
+│       ├── main_scaffold.dart     # ShellRoute scaffold with bottom NavigationBar
+│       ├── national_local_toggle.dart  # Island-wide / District toggle + picker
+│       ├── stale_data_banner.dart # Cache staleness indicator
+│       ├── weather_card.dart      # Weather info card
+│       └── widgets.dart           # Barrel export
 │
-└── main.dart
+└── main.dart                      # App entry point, DI init, theme setup
 ```
 
-### 8.2 State Management
+### 9.2 State Management
 
 | Layer | Tool |
 |-------|------|
-| UI State | `flutter_bloc` (BLoC pattern) |
-| Global App State | `get_it` + `injectable` (service locator) |
-| Persistent Settings | `hive` |
-| Local DB (timeline) | `drift` (type-safe SQLite) |
-| Navigation | `go_router` |
+| UI State | `flutter_bloc` (WeatherBloc, SettingsBloc) |
+| Dependency Injection | `get_it` (manual registration) |
+| Persistent Settings | `hive_flutter` (HiveService) |
+| Weather Cache | `hive_flutter` (HiveService) |
+| Navigation | `go_router` (ShellRoute for tabs, push route for detail) |
 
-### 8.3 BLoC States Example — WeatherBloc
+### 9.3 BLoC States — WeatherBloc
 
-```dart
-abstract class WeatherState {}
-class WeatherInitial extends WeatherState {}
-class WeatherLoading extends WeatherState {}
-class WeatherLoaded extends WeatherState {
-  final WeatherData current;
-  final List<HourlyData> hourly;
-  final List<DailyData> daily;
-  final bool isStaleCache;
-}
-class WeatherError extends WeatherState {
-  final String message;
-  final WeatherData? cachedData; // show stale if available
-}
 ```
+WeatherInitial
+WeatherLoading
+WeatherRefreshing (weatherData, location, isStaleCache, selectedDistrict)
+WeatherLoaded (weatherData, location, isStaleCache, searchResults, isSearching, selectedDistrict)
+WeatherError (message, cachedData?)
+```
+
+**Events:** `LoadWeather`, `LoadWeatherForDistrict`, `RefreshWeather`, `SearchLocations`, `SelectLocation`, `_FetchWeatherInBackground` (private)
+
+The BLoC uses a pattern where cached data is emitted immediately (`WeatherLoaded` with `isStaleCache: true`), then a `_FetchWeatherInBackground` event is added to fetch fresh data. On failure, it falls back to showing the stale cache.
+
+### 9.4 BLoC States — SettingsBloc
+
+Single `SettingsState` with: `isDarkMode`, `colourVisionMode`, `contrastMode`, `textSizeScale`, `fontWeightScale`, `isLoaded`.
+
+**Events:** `LoadSettings`, `ToggleDarkMode`, `SetColourVisionMode`, `SetContrastMode`, `SetTextSizeScale`, `SetFontWeightScale`.
 
 ---
 
-## 9. Flutter Package Dependencies
+## 10. Flutter Package Dependencies
 
 ```yaml
+# From pubspec.yaml (actual current versions)
+environment:
+  sdk: ^3.11.5
+
 dependencies:
   flutter:
     sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
 
   # State Management
-  flutter_bloc: ^8.1.5
+  flutter_bloc: ^9.1.1
   equatable: ^2.0.5
-  get_it: ^8.0.0
-  injectable: ^2.4.2
+  get_it: ^9.2.1
 
   # Navigation
-  go_router: ^14.2.0
+  go_router: ^17.2.2
 
   # Networking
-  dio: ^5.4.3
+  dio: ^5.7.0
   dio_cache_interceptor: ^3.5.0
-  dio_cache_interceptor_hive_store: ^3.2.1
-  connectivity_plus: ^6.0.3
+  dio_cache_interceptor_hive_store: ^4.0.0
+  connectivity_plus: ^7.1.1
 
   # Local Storage
   hive_flutter: ^1.1.0
-  drift: ^2.19.1
-  sqlite3_flutter_libs: ^0.5.22
 
   # Maps
-  flutter_map: ^7.0.0
+  flutter_map: ^8.3.0
   latlong2: ^0.9.1
 
   # Location
-  geolocator: ^12.0.0
-  geocoding: ^3.0.0
+  geolocator: ^14.0.2
+  geocoding: ^4.0.0
 
   # Notifications
-  flutter_local_notifications: ^17.2.1
-  firebase_messaging: ^15.1.4   # FCM for server-push (optional)
-
-  # Widgets
-  home_widget: ^0.7.0
+  flutter_local_notifications: ^21.0.0
 
   # UI & Design
-  google_fonts: ^6.2.1          # Inter (fallback if bundled fonts fail)
-  flutter_svg: ^2.0.10
-  shimmer: ^3.0.0               # Loading skeletons
-  fl_chart: ^0.69.0             # Weather charts (hourly forecast)
-  cached_network_image: ^3.4.0
+  google_fonts: ^8.0.2
+  flutter_svg: ^2.0.16
+  shimmer: ^3.0.0
+  fl_chart: ^1.2.0
+  cached_network_image: ^3.4.1
 
   # Permissions
-  permission_handler: ^11.3.1
+  permission_handler: ^12.0.1
 
   # Internationalization
-  flutter_localizations:
-    sdk: flutter
-  intl: ^0.19.0
+  intl: ^0.20.2
+  timeago: ^3.7.0
 
-  # Date/Time
-  timeago: ^3.6.1
-
-  # Utilities
-  freezed_annotation: ^2.4.1
+  # Code Generation
+  freezed_annotation: ^3.1.0
   json_annotation: ^4.9.0
-  rxdart: ^0.27.7
+  rxdart: ^0.28.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  build_runner: ^2.4.10
-  freezed: ^2.5.2
+  flutter_lints: ^6.0.0
+  build_runner: ^2.4.13
+  freezed: ^3.2.5
   json_serializable: ^6.8.0
-  injectable_generator: ^2.6.1
-  drift_dev: ^2.19.1
-  mocktail: ^1.0.4
-  bloc_test: ^9.1.7
-  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/icons/
+    - assets/images/
 ```
+
+**Assets directory:** `assets/icons/` and `assets/images/` exist but currently contain only `.gitkeep` files. No bundled font assets — fonts are loaded via `google_fonts` at runtime.
 
 ---
 
-## 10. Notification System
+## 11. Sri Lanka Localization
 
-### 10.1 Architecture
+The app is fully localized for Sri Lanka. Core data defined in [`app_sl_constants.dart`](lib/core/constants/app_sl_constants.dart).
 
-```
-Open-Meteo API ──→ Background Fetch (WorkManager/BGTaskScheduler)
-                         │
-                         ├── Parse weather codes & thresholds
-                         │
-                         ├── Compare to user's saved threshold prefs
-                         │
-                         └── flutter_local_notifications
-                                    │
-                                    ├── Critical Alert (iOS) / High Priority (Android)
-                                    ├── Normal notification
-                                    └── Silent notification (data refresh)
-```
+### 25 Districts
 
-### 10.2 Background Fetch
+Enumerated in `SLDistrict` with display name, province, and center coordinates.
 
-```dart
-// Android: WorkManager via workmanager package
-// iOS: BGAppRefreshTask via background_fetch package
+### 9 Provinces
+Western, Central, Southern, Northern, Eastern, North Western, North Central, Uva, Sabaragamuwa.
 
-@pragma('vm:entry-point')
-Future<void> backgroundFetchCallback() async {
-  final weatherRepo = getIt<WeatherRepository>();
-  final alertService = getIt<AlertEvaluationService>();
+### 6 DMC-Aligned Alert Types
+`SLAlertType`: flood, landslide, cyclone, lightning, coastalWarning, tsunami.
 
-  final data = await weatherRepo.fetchCurrent(location);
-  final alerts = alertService.evaluate(data);
+### 12 Major Cities
+Colombo, Kandy, Galle, Jaffna, Batticaloa, Trincomalee, Anuradhapura, Ratnapura, Badulla, Kurunegala, Matara, Hambantota.
 
-  for (final alert in alerts) {
-    await notificationService.showAlert(alert);
-  }
-}
-```
+### Map Bounds
+- Center: LatLng(7.8731, 80.7718) — near Dambulla
+- Initial zoom: 7.2
+- Min zoom: 6.0, Max zoom: 18.0
+- SW bound: LatLng(5.9167, 79.5333)
+- NE bound: LatLng(9.8167, 81.8167)
 
-### 10.3 Notification Channels (Android)
+### Monsoon Awareness
+`SLMonsoon` enum detects current monsoon season from date:
+- SW Monsoon (May–September)
+- NE Monsoon (December–February)
+- 1st Inter-Monsoon (March–April)
+- 2nd Inter-Monsoon (October–November)
 
-| Channel ID | Name | Importance | Sound |
-|------------|------|------------|-------|
-| `channel_critical` | Critical Alerts | IMPORTANCE_MAX | Custom alarm tone |
-| `channel_warning` | Weather Warnings | IMPORTANCE_HIGH | Default |
-| `channel_advisory` | Advisories | IMPORTANCE_DEFAULT | None |
-| `channel_info` | General Info | IMPORTANCE_LOW | None |
-
-### 10.4 Critical Alert (iOS)
-
-```dart
-const iosDetails = DarwinNotificationDetails(
-  categoryIdentifier: 'CRITICAL_ALERT',
-  interruptionLevel: InterruptionLevel.critical,
-  sound: 'nerv_critical.aiff',  // bundled custom sound
-  criticalSoundVolume: 1.0,
-);
-```
+### National/Local Toggle
+The [`NationalLocalToggle`](lib/presentation/widgets/national_local_toggle.dart) widget provides Island-wide vs. District switching across Home, Timeline, and Weather screens.
 
 ---
 
-## 11. Privacy & Security Requirements
+## 12. Planned Features & Roadmap
+
+### Completed (v1.0)
+- [x] Design system (dark/light themes, typography, spacing)
+- [x] AccuWeather backend proxy (Shelf/Dart server)
+- [x] Weather data pipeline (current + hourly + daily)
+- [x] Home screen (map + conditions + derived alerts)
+- [x] Weather screen (draggable sheet + detailed weather)
+- [x] Map screen (rain radar with RainViewer)
+- [x] Timeline screen (derived events)
+- [x] Menu screen (saved regions, supporters club, about)
+- [x] Settings screen (accessibility, notifications)
+- [x] Sri Lanka localization (25 districts, 6 alert types, monsoons)
+- [x] Island-wide / District toggle
+- [x] Location search with GPS fallback
+- [x] Hive caching with staleness indicators
+- [x] Colour vision modes (3 modes)
+- [x] Text size and font weight scaling
+
+### Planned — DMC Alert Integration
+See [`plans/dmc_alert_integration_plan.md`](plans/dmc_alert_integration_plan.md):
+- Real multi-source alert aggregation (Open-Meteo flood, GDACS cyclone/tsunami, ReliefWeb)
+- Dedicated AlertBloc for Home + Timeline
+- Backend alert aggregation engine
+- Replace derived alerts with real alert pipeline
+
+### Future
+- [ ] Crisis Mapping (entity defined, not implemented)
+- [ ] Push notifications (package included, not wired up)
+- [ ] Earthquake Early Warning (not implemented)
+- [ ] Home screen / lock screen widgets (not implemented)
+- [ ] Sinhala / Tamil language support
+- [ ] Real DMC alert feed integration
+- [ ] Offline map tile caching
+- [ ] Server-side caching proxy for multi-user scale
+
+---
+
+## 13. Privacy & Security Requirements
 
 | Req ID | Requirement | Implementation |
 |--------|-------------|----------------|
-| PRIV-01 | GPS coordinates never sent to any server | Convert lat/lon to ~1km grid cell (Open-Meteo uses lat/lon but only retains it per-request; no user ID sent) |
+| PRIV-01 | API key not exposed to client | Stored in backend `.env`; all AccuWeather calls proxied through Shelf server |
 | PRIV-02 | No analytics SDK | No Firebase Analytics, Mixpanel, or similar |
 | PRIV-03 | No advertising SDK | No AdMob, no Meta Audience Network |
 | PRIV-04 | No user account required | App functions fully without registration |
-| PRIV-05 | All API calls over HTTPS | Enforce `CertificatePinner` on Dio |
-| PRIV-06 | Location history not stored remotely | Timeline stored on-device (SQLite) only |
+| PRIV-05 | GPS coordinates sent only to backend | Location → backend → AccuWeather (AccuWeather receives coordinates) |
+| PRIV-06 | Location history not stored remotely | Cached on-device in Hive only |
 | PRIV-07 | Uninstall clears all data | No remote data deletion needed (no user account) |
-| PRIV-08 | Open-Meteo attribution required | Display "Weather data: Open-Meteo.com (CC BY 4.0)" in About screen |
 
 ---
 
-## 12. Non-Functional Requirements
+## 14. Non-Functional Requirements
 
 ### Performance
 
@@ -1160,154 +1033,101 @@ const iosDetails = DarwinNotificationDetails(
 | Weather data refresh (cache hit) | < 100ms |
 | Weather data refresh (network) | < 1.5 seconds |
 | Map tile load | < 500ms per tile |
-| Notification delivery (background fetch) | < 5 min latency |
-| Scroll frame rate | 60 fps (90/120 on supported devices) |
+| Scroll frame rate | 60 fps |
 
 ### Offline Behaviour
 
 | Feature | Offline Behaviour |
 |---------|-----------------|
-| Home screen | Shows last cached weather with "Last updated X ago" banner |
-| Map | Shows cached tiles + last overlay data |
-| Timeline | Shows locally stored events |
-| Crisis Map | Shows cached pins (read-only) |
-| Notifications | Background fetch fails silently; no false alerts |
-
-### Battery
-
-- Background fetch interval: minimum 15 minutes (OS-enforced on iOS)
-- Location updates: max once per 15 minutes in background
-- Low Power Mode: suspend all background activity; show banner in UI
+| Home screen | Shows last cached weather with stale data banner |
+| Map | Shows cached tiles (no rain overlay) |
+| Timeline | Shows last derived events from cached weather |
+| Weather screen | Shows cached weather data |
 
 ### App Size
 
 | Target | Value |
 |--------|-------|
-| iOS IPA (compressed) | < 30 MB |
-| Android APK | < 25 MB |
-| Android AAB | < 20 MB |
+| APK / IPA | < 50 MB |
 
 ---
 
-## 13. Accessibility Requirements
+## 15. Accessibility Requirements
 
-| ID | Requirement |
-|----|-------------|
-| ACC-01 | All interactive elements have semantic labels (`Semantics` widget) |
-| ACC-02 | Minimum touch target 48×48dp for all tappable elements |
-| ACC-03 | WCAG 2.1 AA contrast ratio (4.5:1 for text, 3:1 for UI elements) |
-| ACC-04 | No information conveyed by colour alone — always paired with icon or text |
-| ACC-05 | VoiceOver / TalkBack: all screens navigable without visual reference |
-| ACC-06 | Screen reader layout available (map hidden, linear layout) |
-| ACC-07 | Reduce Motion: all animations respect `MediaQuery.of(ctx).disableAnimations` |
-| ACC-08 | Font size: respect OS dynamic type; app-level override also available |
-| ACC-09 | Colour vision modes selectable per the design system palette (§4.2) |
-| ACC-10 | Critical alerts include haptic feedback (pattern-coded by severity) |
-
----
-
-## 14. Release Milestones
-
-### MVP — v1.0 (Weeks 1–8)
-
-- [ ] Design system implementation (theme, typography, components)
-- [ ] Open-Meteo API integration (current + hourly + daily)
-- [ ] Home screen (weather cards + alert banners)
-- [ ] Weather detail screen
-- [ ] Basic push notifications (weather warnings)
-- [ ] Settings screen (theme, font, colour vision)
-- [ ] Location permission + geocoding
-
-### v1.1 (Weeks 9–12)
-
-- [ ] Map screen with Rain Radar overlay
-- [ ] Timeline screen (72-hour log)
-- [ ] Air Quality + UV integration
-- [ ] Home screen + lock screen widgets
-- [ ] Offline mode (stale cache display)
-
-### v1.2 (Weeks 13–16)
-
-- [ ] Crisis Mapping layer (read)
-- [ ] Crisis Mapping post/edit (write, Supporters' Club members)
-- [ ] Flood API integration
-- [ ] Critical Alert full-screen modal
-- [ ] Haptic feedback system
-
-### v1.3 (Weeks 17–20)
-
-- [ ] Earthquake EEW simulation (USGS GeoJSON feed)
-- [ ] Accessibility audit & screen reader layout
-- [ ] Background fetch optimisation
-- [ ] Performance profiling & battery testing
-- [ ] App Store + Play Store submission
+| ID | Requirement | Status |
+|----|-------------|--------|
+| ACC-01 | All interactive elements have semantic labels | Partial |
+| ACC-02 | Minimum touch target 48×48dp | Enforced via `AppConstants.minTouchTarget` |
+| ACC-03 | WCAG 2.1 AA contrast ratio (4.5:1 for text) | Dark theme has high contrast |
+| ACC-04 | No information conveyed by colour alone | Severity always paired with label text |
+| ACC-05 | VoiceOver / TalkBack support | Not yet tested |
+| ACC-06 | Reduce Motion support | Not yet implemented |
+| ACC-07 | Font size scaling | 6 levels (0.75× to 1.5×) |
+| ACC-08 | Font weight scaling | 3 levels (normal, medium, bold) |
+| ACC-09 | Colour vision modes | 3 modes selectable in Settings |
+| ACC-10 | High contrast mode | 3 levels selectable in Settings |
 
 ---
 
-## 15. Open Questions & Risks
+## 16. Open Questions & Risks
 
 | # | Question / Risk | Mitigation |
 |---|-----------------|-----------|
-| R1 | **Open-Meteo commercial terms** — if app adds subscription revenue, free tier no longer applies | Budget for Open-Meteo paid plan ($20+/month) or self-host the API |
-| R2 | **API rate limits at scale** — 10,000 calls/day is enough for personal use, not multi-user | Implement server-side caching proxy before public launch |
-| R3 | **Background fetch reliability on iOS** — BGAppRefreshTask is not guaranteed | Supplement with silent push notifications from a backend if latency is critical |
-| R4 | **Earthquake EEW data** — no global free real-time EEW API exists; USGS is post-event | For a production EEW feature, licence data from a national seismic agency |
-| R5 | **Crisis Mapping moderation** — user-submitted data can be inaccurate or malicious | Require account for submission; implement community flagging + admin review queue |
-| R6 | **Machine translation quality** — poor translation during crisis can be dangerous | Clearly label machine-translated content; allow manual correction by bilingual members |
-| R7 | **Map tile costs** — Mapbox / Google Maps are not free at scale | Use `flutter_map` with OpenStreetMap tiles (free, attribution required) |
+| R1 | **AccuWeather API cost at scale** — 50 calls/day free tier limit | Backend with per-location caching; upgrade to paid tier if needed |
+| R2 | **Backend single point of failure** — if Shelf server is down, no weather data | Hive cache provides offline fallback; consider serverless proxy |
+| R3 | **No real alert data source for Sri Lanka** — DMC has no public API | Multi-source aggregation planned (see DMC integration plan); derive from weather thresholds in the meantime |
+| R4 | **RainViewer API reliability** — free tier, no SLA | Graceful degradation: show map without radar overlay |
+| R5 | **Font loading** — google_fonts requires network on first launch | Bundle Inter font as asset for offline-first reliability |
+| R6 | **Crisis Mapping abuse** — no auth system for user-submitted data | Not yet implemented; will need moderation when built |
+| R7 | **Map tile costs** — CartoDB free tier limits | Monitor usage; OpenStreetMap tile fallback available |
+| R8 | **weather_detail_screen.dart** — uses hardcoded placeholder data | Needs wiring to WeatherBloc for real data |
 
 ---
 
-## Appendix A — Open-Meteo Attribution
+## Appendix A — Key File Reference
 
-As required by CC BY 4.0:
-
-> Weather data provided by **Open-Meteo** (open-meteo.com) under the [CC BY 4.0 licence](https://creativecommons.org/licenses/by/4.0/).  
-> Based on data from national weather services: NOAA, ECMWF, DWD, Météo-France, JMA, and others.
-
-Place this attribution in the **About screen** and in the **app's App Store description**.
+| File | Purpose |
+|------|---------|
+| [`lib/main.dart`](lib/main.dart) | App entry, DI init, MaterialApp.router setup |
+| [`lib/core/constants/app_sl_constants.dart`](lib/core/constants/app_sl_constants.dart) | Sri Lanka data: districts, cities, alert types, map bounds, monsoons |
+| [`lib/core/utils/weather_alert_deriver.dart`](lib/core/utils/weather_alert_deriver.dart) | Threshold-based alert derivation from weather data |
+| [`lib/core/theme/app_theme.dart`](lib/core/theme/app_theme.dart) | Dark/light ThemeData with accessibility overrides |
+| [`lib/core/router/app_router.dart`](lib/core/router/app_router.dart) | GoRouter with ShellRoute (5 tabs) + weather-detail push route |
+| [`lib/core/di/injection.dart`](lib/core/di/injection.dart) | get_it service locator registration |
+| [`lib/data/remote/accuweather/accuweather_client.dart`](lib/data/remote/accuweather/accuweather_client.dart) | Dio client for backend AccuWeather proxy |
+| [`lib/data/local/hive/hive_service.dart`](lib/data/local/hive/hive_service.dart) | Hive box management |
+| [`lib/data/repositories/weather_repository_impl.dart`](lib/data/repositories/weather_repository_impl.dart) | Weather repo with caching, GPS, serialization |
+| [`lib/presentation/blocs/weather/weather_bloc.dart`](lib/presentation/blocs/weather/weather_bloc.dart) | WeatherBloc with district-aware loading |
+| [`lib/presentation/blocs/settings/settings_bloc.dart`](lib/presentation/blocs/settings/settings_bloc.dart) | SettingsBloc for user preferences |
+| [`lib/presentation/widgets/national_local_toggle.dart`](lib/presentation/widgets/national_local_toggle.dart) | Island-wide / District toggle |
+| [`lib/presentation/widgets/main_scaffold.dart`](lib/presentation/widgets/main_scaffold.dart) | ShellRoute scaffold with 5-tab bottom nav |
+| [`backend/lib/server.dart`](backend/lib/server.dart) | Shelf server proxying AccuWeather API |
+| [`plans/dmc_alert_integration_plan.md`](plans/dmc_alert_integration_plan.md) | Architectural plan for real alert pipeline |
+| [`plans/sri_lanka_localization_plan.md`](plans/sri_lanka_localization_plan.md) | Completed SL localization plan |
 
 ---
 
 ## Appendix B — Design Tokens (Flutter ThemeData)
 
 ```dart
-ThemeData buildDarkTheme({
-  ColourVisionMode visionMode = ColourVisionMode.normal,
-  ContrastMode contrast = ContrastMode.normal,
-}) {
-  return ThemeData(
-    brightness: Brightness.dark,
-    scaffoldBackgroundColor: const Color(0xFF0A0C10),
-    colorScheme: ColorScheme.dark(
-      primary: const Color(0xFFFF6B00),
-      secondary: const Color(0xFFFF9500),
-      surface: const Color(0xFF12151C),
-      error: const Color(0xFFFF1744),
-    ),
-    textTheme: TextTheme(
-      displayLarge: TextStyle(fontFamily: 'Inter', fontSize: 32, fontWeight: FontWeight.w700, color: Color(0xFFF0F2F8)),
-      headlineMedium: TextStyle(fontFamily: 'Inter', fontSize: 20, fontWeight: FontWeight.w600, color: Color(0xFFF0F2F8)),
-      bodyLarge: TextStyle(fontFamily: 'Inter', fontSize: 16, fontWeight: FontWeight.w400, color: Color(0xFFF0F2F8)),
-      bodyMedium: TextStyle(fontFamily: 'Inter', fontSize: 14, fontWeight: FontWeight.w400, color: Color(0xFF8B95B0)),
-      labelLarge: TextStyle(fontFamily: 'Inter', fontSize: 14, fontWeight: FontWeight.w500, color: Color(0xFFF0F2F8)),
-    ),
-    navigationBarTheme: NavigationBarThemeData(
-      backgroundColor: const Color(0xFF12151C),
-      indicatorColor: const Color(0xFFFF6B0033),
-    ),
-    cardTheme: CardTheme(
-      color: const Color(0xFF12151C),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: const BorderSide(color: Color(0xFF2A2F3E)),
-      ),
-    ),
-  );
-}
+// Actual dark theme structure from AppTheme.darkTheme()
+ThemeData(
+  brightness: Brightness.dark,
+  useMaterial3: true,
+  scaffoldBackgroundColor: Color(0xFF000000),
+  colorScheme: ColorScheme.dark(
+    primary: Color(0xFF00BCD4),       // Cyan accent
+    secondary: Color(0xFF00E5FF),
+    surface: Color(0xFF1A1A1A),
+    error: Color(0xFFFF1744),
+  ),
+  // Cards: zero elevation, 1px #2A2A2A border, 12dp radius
+  // NavigationBar: transparent indicator, 64dp height
+  // Text: google_fonts Inter, all sizes × textSizeScale multiplier
+)
 ```
 
 ---
 
-*This PRD is a living document. All specifications are subject to revision as development progresses.*  
-*Weather data attribution: Open-Meteo.com — CC BY 4.0*
+*This PRD reflects the codebase as of May 27, 2026. All specifications are subject to revision as development progresses.*
+*Weather data: AccuWeather via backend proxy. Map tiles: CartoDB. Radar: RainViewer.*

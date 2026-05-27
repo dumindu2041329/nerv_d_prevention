@@ -34,6 +34,7 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
   bool _isIslandWide = true;
   SLDistrict? _selectedDistrict;
   final MapController _mapController = MapController();
+  LatLng? _gpsLocation;
 
   void _updateDistrict(bool isNational, SLDistrict? district) {
     setState(() {
@@ -56,7 +57,25 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return BlocListener<WeatherBloc, WeatherState>(
+      listener: (context, state) {
+        if (state is WeatherLoaded && state.location != null) {
+          final loc = state.location!;
+          final newLatLng = LatLng(loc.latitude, loc.longitude);
+          if (_gpsLocation != newLatLng) {
+            setState(() {
+              _gpsLocation = newLatLng;
+            });
+            if (_isIslandWide && _selectedDistrict == null) {
+              _mapController.move(
+                newLatLng,
+                _mapZoomFor(_isIslandWide, _selectedDistrict),
+              );
+            }
+          }
+        }
+      },
+      child: Scaffold(
       backgroundColor: Colors.black,
       body: Column(
         children: [
@@ -81,6 +100,7 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
           // Weather & Alert section
           Expanded(flex: 45, child: _buildWeatherAlertSection(context)),
         ],
+      ),
       ),
     );
   }
@@ -136,6 +156,9 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
     if (!isNational && district != null) {
       return district.center;
     }
+    if (_gpsLocation != null) {
+      return _gpsLocation!;
+    }
     return SLMapConstants.center;
   }
 
@@ -147,6 +170,9 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
   }
 
   Widget _buildMapSection(BuildContext context) {
+    final markerPoint = _gpsLocation ??
+        _mapCenterFor(_isIslandWide, _selectedDistrict);
+
     return Column(
       children: [
         // Rainbow gradient line
@@ -190,7 +216,7 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
                   Marker(
                     width: 40,
                     height: 40,
-                    point: _mapCenterFor(_isIslandWide, _selectedDistrict),
+                    point: markerPoint,
                     child: _buildLocationMarker(),
                   ),
                 ],
