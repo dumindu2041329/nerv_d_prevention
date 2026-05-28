@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_map/flutter_map.dart';
+import '../../../core/constants/app_constants.dart';
 import '../../../core/di/injection.dart';
 import '../../../core/constants/app_sl_constants.dart';
 import '../../../core/constants/weather_codes.dart';
 import '../../../core/utils/date_time_utils.dart';
+import '../../../domain/entities/location.dart';
 import '../../blocs/weather/weather_bloc.dart';
 import '../../widgets/national_local_toggle.dart';
 
@@ -17,28 +19,42 @@ class WeatherScreen extends StatefulWidget {
 
 class _WeatherScreenState extends State<WeatherScreen> {
   bool _isIslandWide = true;
-  SLDistrict? _selectedDistrict;
   final DraggableScrollableController _sheetController =
       DraggableScrollableController();
 
-  void _updateDistrict(bool isNational, SLDistrict? district) {
-    setState(() {
-      _isIslandWide = isNational;
-      _selectedDistrict = district;
-    });
-    if (district != null) {
+  void _onToggleChanged(bool isNational) {
+    setState(() => _isIslandWide = isNational);
+    if (isNational) {
       context.read<WeatherBloc>().add(
-        LoadWeatherForDistrict(district: district),
+        LoadWeather(
+          location: const Location(
+            id: 'island_wide',
+            name: 'Sri Lanka',
+            country: 'Sri Lanka',
+            latitude: 7.8731,
+            longitude: 80.7718,
+          ),
+        ),
       );
     } else {
-      context.read<WeatherBloc>().add(const LoadWeather());
+      context.read<WeatherBloc>().add(const LoadWeather(useGps: true));
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
-      create: (_) => getIt<WeatherBloc>()..add(const LoadWeather()),
+      create: (_) => getIt<WeatherBloc>()..add(
+        LoadWeather(
+          location: const Location(
+            id: 'island_wide',
+            name: 'Sri Lanka',
+            country: 'Sri Lanka',
+            latitude: 7.8731,
+            longitude: 80.7718,
+          ),
+        ),
+      ),
       child: Scaffold(
         backgroundColor: Colors.black,
         body: Stack(
@@ -47,12 +63,8 @@ class _WeatherScreenState extends State<WeatherScreen> {
             Positioned.fill(
               child: FlutterMap(
                 options: MapOptions(
-                  initialCenter: _isIslandWide
-                      ? SLMapConstants.center
-                      : (_selectedDistrict?.center ?? SLMapConstants.center),
-                  initialZoom: _isIslandWide
-                      ? SLMapConstants.initialZoom
-                      : 10.0,
+                  initialCenter: SLMapConstants.center,
+                  initialZoom: SLMapConstants.initialZoom,
                   minZoom: SLMapConstants.minZoom,
                   maxZoom: SLMapConstants.maxZoom,
                   interactionOptions: const InteractionOptions(
@@ -61,10 +73,13 @@ class _WeatherScreenState extends State<WeatherScreen> {
                 ),
                 children: [
                   TileLayer(
-                    urlTemplate:
-                        'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
-                    subdomains: const ['a', 'b', 'c', 'd'],
+                    urlTemplate: ApiConstants.mapTileHybrid,
                     userAgentPackageName: 'com.example.nerv_d_prevention',
+                  ),
+                  TileLayer(
+                    urlTemplate: ApiConstants.owmPrecipitationOverlay,
+                    userAgentPackageName: 'com.example.nerv_d_prevention',
+                    tileDisplay: const TileDisplay.instantaneous(opacity: 0.6),
                   ),
                 ],
               ),
@@ -76,13 +91,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
               right: 0,
               child: NationalLocalToggle(
                 isNational: _isIslandWide,
-                selectedDistrict: _selectedDistrict,
-                onChanged: (isNational) {
-                  _updateDistrict(isNational, null);
-                },
-                onDistrictSelected: (district) {
-                  _updateDistrict(false, district);
-                },
+                onChanged: _onToggleChanged,
               ),
             ),
             // Draggable bottom sheet with real data
@@ -158,7 +167,6 @@ class _WeatherScreenState extends State<WeatherScreen> {
     final hourly = data.hourly;
     final daily = data.daily;
     final locationName =
-        state.selectedDistrict?.displayName ??
         state.location?.name ??
         'Current Location';
 

@@ -1,6 +1,7 @@
 import 'package:get_it/get_it.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-import '../../data/remote/accuweather/accuweather_client.dart';
+import '../../data/remote/weatherapi/weather_api_client.dart';
+import '../../data/remote/maptiler/maptiler_geocoding_client.dart';
 import '../../data/repositories/weather_repository_impl.dart';
 import '../../data/repositories/settings_repository_impl.dart';
 import '../../data/local/hive/hive_service.dart';
@@ -18,12 +19,13 @@ Future<void> initDependencies() async {
   await hiveService.init();
   getIt.registerSingleton<HiveService>(hiveService);
 
-  final accuWeatherClient = AccuWeatherClient();
-  getIt.registerSingleton<AccuWeatherClient>(accuWeatherClient);
+  getIt.registerSingleton<WeatherApiClient>(WeatherApiClient());
+  getIt.registerSingleton<MaptilerGeocodingClient>(MaptilerGeocodingClient());
 
   getIt.registerSingleton<WeatherRepository>(
     WeatherRepositoryImpl(
-      client: getIt<AccuWeatherClient>(),
+      client: getIt<WeatherApiClient>(),
+      geocodingClient: getIt<MaptilerGeocodingClient>(),
       hiveService: getIt<HiveService>(),
     ),
   );

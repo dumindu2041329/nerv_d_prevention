@@ -16,11 +16,11 @@ class SLMapConstants {
   /// Initial zoom level showing the entire island
   static const double initialZoom = 7.2;
 
-  /// Minimum zoom (shows all of Sri Lanka with surrounding ocean)
-  static const double minZoom = 6.0;
+  /// Minimum zoom (allows user to zoom out to global view)
+  static const double minZoom = 2.0;
 
-  /// Maximum zoom for street-level detail
-  static const double maxZoom = 18.0;
+  /// Maximum zoom for fine street-level detail
+  static const double maxZoom = 19.0;
 
   /// South-west bound of Sri Lanka
   static const LatLng southWest = LatLng(5.9167, 79.5333);

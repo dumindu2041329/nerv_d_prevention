@@ -3,7 +3,6 @@ import 'package:equatable/equatable.dart';
 import '../../../domain/entities/weather_data.dart';
 import '../../../domain/entities/location.dart';
 import '../../../domain/repositories/weather_repository.dart';
-import '../../../core/constants/app_sl_constants.dart';
 
 part 'weather_event.dart';
 part 'weather_state.dart';
@@ -15,119 +14,37 @@ class WeatherBloc extends Bloc<WeatherEvent, WeatherState> {
     : _weatherRepository = weatherRepository,
       super(WeatherInitial()) {
     on<LoadWeather>(_onLoadWeather);
-    on<LoadWeatherForDistrict>(_onLoadWeatherForDistrict);
     on<_FetchWeatherInBackground>(_onFetchWeatherInBackground);
     on<RefreshWeather>(_onRefreshWeather);
     on<SearchLocations>(_onSearchLocations);
     on<SelectLocation>(_onSelectLocation);
   }
 
-  Future<void> _onLoadWeatherForDistrict(
-    LoadWeatherForDistrict event,
-    Emitter<WeatherState> emit,
-  ) async {
-    final district = event.district;
-    final location = Location(
-      id: 'district_${district.name}',
-      name: district.displayName,
-      country: 'Sri Lanka',
-      admin1: district.province,
-      latitude: district.center.latitude,
-      longitude: district.center.longitude,
-      district: district,
-    );
-
-    final cached = await _weatherRepository.getCachedWeatherData();
-    if (cached != null) {
-      emit(
-        WeatherLoaded(
-          weatherData: cached,
-          location: location,
-          isStaleCache: true,
-          selectedDistrict: district,
-        ),
-      );
-      add(
-        _FetchWeatherInBackground(
-          location: location,
-          forceRefresh: event.forceRefresh,
-          selectedDistrict: district,
-        ),
-      );
-    } else {
-      emit(WeatherLoading());
-      add(
-        _FetchWeatherInBackground(
-          location: location,
-          forceRefresh: event.forceRefresh,
-          selectedDistrict: district,
-        ),
-      );
-    }
-  }
-
   Future<void> _onLoadWeather(
     LoadWeather event,
     Emitter<WeatherState> emit,
   ) async {
-    Location? targetLocation = event.location;
-
-    if (targetLocation == null || targetLocation.isGps) {
-      final cachedLocation = _weatherRepository.getCachedLocation();
-      if (cachedLocation != null) {
-        targetLocation = cachedLocation;
-      }
-    }
-
-    final location =
-        targetLocation ??
-        const Location(
-          id: 'default',
-          name: 'Colombo',
-          country: 'Sri Lanka',
-          latitude: 6.9271,
-          longitude: 79.8612,
-        );
-
-    final cached = await _weatherRepository.getCachedWeatherData();
-    if (cached != null) {
-      emit(
-        WeatherLoaded(
-          weatherData: cached,
-          location: location,
-          isStaleCache: true,
-        ),
-      );
-
-      add(
-        _FetchWeatherInBackground(
-          location: location,
-          forceRefresh: event.forceRefresh,
-        ),
-      );
-    } else {
+    // Fixed location provided (e.g. Island-wide) — fetch fresh, no cache, no GPS
+    if (event.location != null && !event.useGps) {
       emit(WeatherLoading());
-      if (targetLocation == null || targetLocation.isGps) {
-        targetLocation = await _weatherRepository.getLocationFromGps();
-        final finalLocation = targetLocation ?? location;
-        if (targetLocation != null) {
-          await _weatherRepository.cacheLocation(targetLocation);
-        }
-        add(
-          _FetchWeatherInBackground(
-            location: finalLocation,
-            forceRefresh: event.forceRefresh,
-          ),
-        );
-      } else {
-        add(
-          _FetchWeatherInBackground(
-            location: location,
-            forceRefresh: event.forceRefresh,
-          ),
-        );
-      }
+      add(_FetchWeatherInBackground(location: event.location!, forceRefresh: true));
+      return;
     }
+
+    // GPS / Local mode
+    emit(WeatherLoading());
+    final cachedLocation = _weatherRepository.getCachedLocation();
+    if (cachedLocation != null) {
+      add(_FetchWeatherInBackground(location: cachedLocation, forceRefresh: true));
+    }
+
+    // Resolve real GPS in background and update
+    _weatherRepository.getLocationFromGps().then((gpsLocation) {
+      if (gpsLocation != null) {
+        _weatherRepository.cacheLocation(gpsLocation);
+        add(_FetchWeatherInBackground(location: gpsLocation, forceRefresh: true));
+      }
+    });
   }
 
   Future<void> _onFetchWeatherInBackground(
@@ -156,7 +73,6 @@ class WeatherBloc extends Bloc<WeatherEvent, WeatherState> {
           weatherData: weatherData,
           location: location,
           isStaleCache: false,
-          selectedDistrict: event.selectedDistrict,
         ),
       );
     } catch (e) {
@@ -167,7 +83,6 @@ class WeatherBloc extends Bloc<WeatherEvent, WeatherState> {
             weatherData: currentState.weatherData,
             location: currentState.location,
             isStaleCache: true,
-            selectedDistrict: currentState.selectedDistrict,
           ),
         );
       }
@@ -192,7 +107,6 @@ class WeatherBloc extends Bloc<WeatherEvent, WeatherState> {
             weatherData: weatherData,
             location: currentState.location,
             isStaleCache: false,
-            selectedDistrict: currentState.selectedDistrict,
           ),
         );
       } catch (e) {
@@ -201,7 +115,6 @@ class WeatherBloc extends Bloc<WeatherEvent, WeatherState> {
             weatherData: currentState.weatherData,
             location: currentState.location,
             isStaleCache: true,
-            selectedDistrict: currentState.selectedDistrict,
           ),
         );
       }

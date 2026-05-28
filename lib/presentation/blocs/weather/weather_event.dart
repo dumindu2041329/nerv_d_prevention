@@ -10,24 +10,12 @@ abstract class WeatherEvent extends Equatable {
 class LoadWeather extends WeatherEvent {
   final Location? location;
   final bool forceRefresh;
+  final bool useGps;
 
-  const LoadWeather({this.location, this.forceRefresh = false});
-
-  @override
-  List<Object?> get props => [location, forceRefresh];
-}
-
-class LoadWeatherForDistrict extends WeatherEvent {
-  final SLDistrict district;
-  final bool forceRefresh;
-
-  const LoadWeatherForDistrict({
-    required this.district,
-    this.forceRefresh = false,
-  });
+  const LoadWeather({this.location, this.forceRefresh = false, this.useGps = false});
 
   @override
-  List<Object?> get props => [district, forceRefresh];
+  List<Object?> get props => [location, forceRefresh, useGps];
 }
 
 class RefreshWeather extends WeatherEvent {
@@ -55,14 +43,12 @@ class SelectLocation extends WeatherEvent {
 class _FetchWeatherInBackground extends WeatherEvent {
   final Location location;
   final bool forceRefresh;
-  final SLDistrict? selectedDistrict;
 
   const _FetchWeatherInBackground({
     required this.location,
     this.forceRefresh = false,
-    this.selectedDistrict,
   });
 
   @override
-  List<Object?> get props => [location, forceRefresh, selectedDistrict];
+  List<Object?> get props => [location, forceRefresh];
 }

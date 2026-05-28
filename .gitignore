@@ -34,6 +34,7 @@ migrate_working_dir/
 /coverage/
 
 # Environment variables (contains API keys)
+/.env
 /backend/.env
 
 # Symbolication related

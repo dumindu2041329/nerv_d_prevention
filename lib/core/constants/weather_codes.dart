@@ -1,124 +1,71 @@
 class WeatherCodeMapping {
-  static const Map<int, String> accuWeatherCodeToDescription = {
-    1: 'Sunny',
-    2: 'Mostly Sunny',
-    3: 'Partly Sunny',
-    4: 'Intermittent Clouds',
-    5: 'Hazy Sunshine',
-    6: 'Mostly Cloudy',
-    7: 'Cloudy',
-    8: 'Overcast',
-    9: 'Showers',
-    10: 'Showers',
-    11: 'Light Rain',
-    12: 'Rain',
-    13: 'Rain',
-    14: 'Thunderstorms',
-    15: 'Mostly Cloudy with Showers',
-    16: 'Mostly Cloudy with T-Storms',
-    17: 'Partly Sunny with Showers',
-    18: 'Partly Sunny with T-Storms',
-    19: 'Flurries',
-    20: 'Mostly Cloudy with Flurries',
-    21: 'Partly Sunny with Flurries',
-    22: 'Snow',
-    23: 'Snow',
-    24: 'Sleet',
-    25: 'Freezing Rain',
-    26: 'Rain and Sleet',
-    27: 'Mostly Cloudy with Sleet',
-    28: 'Mostly Cloudy with Rain',
-    29: 'Mostly Cloudy with Rain',
-    30: 'Mostly Cloudy',
-    31: 'Partly Cloudy',
-    32: 'Windy',
-    33: 'Clear',
-    34: 'Mostly Clear',
-    35: 'Partly Cloudy',
-    36: 'Intermittent Clouds',
-    37: 'Hazy Moonlight',
-    38: 'Mostly Cloudy',
-    39: 'Partly Cloudy with Showers',
-    40: 'Mostly Cloudy with Showers',
-    41: 'Foggy',
-    42: 'Foggy',
-    43: 'Mostly Cloudy and Cold',
-    44: 'Mostly Cloudy',
-    45: 'Rain Late',
-    46: 'Rain Late',
-    47: 'Mostly Cloudy with Showers',
+  /// WeatherAPI.com condition codes → description
+  static const Map<int, String> _codeToDescription = {
+    1000: 'Sunny',
+    1003: 'Partly Cloudy',
+    1006: 'Cloudy',
+    1009: 'Overcast',
+    1030: 'Mist',
+    1063: 'Patchy Rain',
+    1066: 'Patchy Snow',
+    1069: 'Patchy Sleet',
+    1072: 'Freezing Drizzle',
+    1087: 'Thundery Outbreaks',
+    1114: 'Blowing Snow',
+    1117: 'Blizzard',
+    1135: 'Fog',
+    1147: 'Freezing Fog',
+    1150: 'Light Drizzle',
+    1153: 'Light Drizzle',
+    1168: 'Freezing Drizzle',
+    1171: 'Heavy Freezing Drizzle',
+    1180: 'Light Rain',
+    1183: 'Light Rain',
+    1186: 'Moderate Rain',
+    1189: 'Moderate Rain',
+    1192: 'Heavy Rain',
+    1195: 'Heavy Rain',
+    1198: 'Light Freezing Rain',
+    1201: 'Moderate Freezing Rain',
+    1204: 'Light Sleet',
+    1207: 'Moderate Sleet',
+    1210: 'Light Snow',
+    1213: 'Light Snow',
+    1216: 'Moderate Snow',
+    1219: 'Moderate Snow',
+    1222: 'Heavy Snow',
+    1225: 'Heavy Snow',
+    1237: 'Ice Pellets',
+    1240: 'Light Rain Shower',
+    1243: 'Moderate Rain Shower',
+    1246: 'Heavy Rain Shower',
+    1249: 'Light Sleet Shower',
+    1252: 'Moderate Sleet Shower',
+    1255: 'Light Snow Shower',
+    1258: 'Heavy Snow Shower',
+    1261: 'Light Ice Pellets',
+    1264: 'Moderate Ice Pellets',
+    1273: 'Thunderstorm with Rain',
+    1276: 'Thunderstorm with Heavy Rain',
+    1279: 'Thunderstorm with Snow',
+    1282: 'Thunderstorm with Heavy Snow',
   };
 
-  static String getDescription(int code) {
-    return accuWeatherCodeToDescription[code] ?? 'Unknown';
-  }
+  static String getDescription(int code) =>
+      _codeToDescription[code] ?? 'Unknown';
 
   static String getIcon(int code) {
-    return _getAccuWeatherIcon(code);
-  }
-
-  static String _getAccuWeatherIcon(int code) {
-    switch (code) {
-      case 1:
-      case 2:
-      case 33:
-      case 34:
-        return '☀️';
-      case 3:
-      case 4:
-      case 31:
-      case 35:
-      case 36:
-        return '⛅';
-      case 5:
-      case 37:
-        return '🌤';
-      case 6:
-      case 7:
-      case 8:
-      case 30:
-      case 38:
-      case 43:
-      case 44:
-        return '☁️';
-      case 9:
-      case 10:
-      case 39:
-      case 40:
-      case 45:
-      case 46:
-      case 47:
-        return '🌧️';
-      case 11:
-      case 12:
-      case 13:
-      case 28:
-      case 29:
-        return '🌧️';
-      case 14:
-      case 16:
-      case 18:
-        return '⛈️';
-      case 15:
-      case 17:
-        return '🌦️';
-      case 19:
-      case 20:
-      case 21:
-      case 22:
-      case 23:
-      case 41:
-      case 42:
-        return '🌨️';
-      case 24:
-      case 25:
-      case 26:
-      case 27:
-        return '🌨️';
-      case 32:
-        return '💨';
-      default:
-        return '❓';
-    }
+    if (code == 1000) return '☀️';
+    if (code == 1003) return '⛅';
+    if (code == 1006 || code == 1009) return '☁️';
+    if (code == 1030 || code == 1135 || code == 1147) return '🌫️';
+    if (code >= 1063 && code <= 1072) return '🌦️';
+    if (code == 1087 || code == 1273 || code == 1276 || code == 1279 || code == 1282) return '⛈️';
+    if (code == 1114 || code == 1117) return '🌨️';
+    if (code >= 1150 && code <= 1201) return '🌧️';
+    if (code >= 1204 && code <= 1237) return '🌨️';
+    if (code >= 1240 && code <= 1246) return '🌧️';
+    if (code >= 1249 && code <= 1264) return '🌨️';
+    return '❓';
   }
 }

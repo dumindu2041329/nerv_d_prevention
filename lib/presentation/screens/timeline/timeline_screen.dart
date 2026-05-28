@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../core/constants/app_sl_constants.dart';
 import '../../../core/di/injection.dart';
 import '../../../core/utils/weather_alert_deriver.dart';
+import '../../../domain/entities/location.dart';
 import '../../../domain/entities/timeline_event.dart';
 import '../../../core/utils/date_time_utils.dart';
 import '../../blocs/weather/weather_bloc.dart';
@@ -17,26 +18,40 @@ class TimelineScreen extends StatefulWidget {
 
 class _TimelineScreenState extends State<TimelineScreen> {
   bool _isIslandWide = true;
-  SLDistrict? _selectedDistrict;
 
-  void _updateDistrict(bool isNational, SLDistrict? district) {
-    setState(() {
-      _isIslandWide = isNational;
-      _selectedDistrict = district;
-    });
-    if (district != null) {
+  void _onToggleChanged(bool isNational) {
+    setState(() => _isIslandWide = isNational);
+    if (isNational) {
       context.read<WeatherBloc>().add(
-        LoadWeatherForDistrict(district: district),
+        LoadWeather(
+          location: const Location(
+            id: 'island_wide',
+            name: 'Sri Lanka',
+            country: 'Sri Lanka',
+            latitude: 7.8731,
+            longitude: 80.7718,
+          ),
+        ),
       );
     } else {
-      context.read<WeatherBloc>().add(const LoadWeather());
+      context.read<WeatherBloc>().add(const LoadWeather(useGps: true));
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
-      create: (_) => getIt<WeatherBloc>()..add(const LoadWeather()),
+      create: (_) => getIt<WeatherBloc>()..add(
+        LoadWeather(
+          location: const Location(
+            id: 'island_wide',
+            name: 'Sri Lanka',
+            country: 'Sri Lanka',
+            latitude: 7.8731,
+            longitude: 80.7718,
+          ),
+        ),
+      ),
       child: Scaffold(
         backgroundColor: Colors.black,
         body: SafeArea(
@@ -44,13 +59,7 @@ class _TimelineScreenState extends State<TimelineScreen> {
             children: [
               NationalLocalToggle(
                 isNational: _isIslandWide,
-                selectedDistrict: _selectedDistrict,
-                onChanged: (isNational) {
-                  _updateDistrict(isNational, null);
-                },
-                onDistrictSelected: (district) {
-                  _updateDistrict(false, district);
-                },
+                onChanged: _onToggleChanged,
               ),
               Expanded(child: _buildTimelineContent(context)),
             ],
@@ -84,7 +93,7 @@ class _TimelineScreenState extends State<TimelineScreen> {
         if (state is WeatherLoaded) {
           final events = WeatherAlertDeriver.deriveTimelineEvents(
             state.weatherData,
-            districtName: state.selectedDistrict?.displayName,
+            districtName: state.location?.name,
           );
           return _buildTimelineList(context, events);
         }

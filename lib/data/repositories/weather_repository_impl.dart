@@ -2,19 +2,23 @@ import '../../../core/constants/app_constants.dart';
 import '../../../domain/entities/weather_data.dart';
 import '../../../domain/entities/location.dart';
 import '../../../domain/repositories/weather_repository.dart';
-import '../remote/accuweather/accuweather_client.dart';
+import '../remote/weatherapi/weather_api_client.dart';
+import '../remote/maptiler/maptiler_geocoding_client.dart';
 import '../local/hive/hive_service.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:geolocator/geolocator.dart';
-import 'package:geocoding/geocoding.dart' as geocoding;
 
 class WeatherRepositoryImpl implements WeatherRepository {
-  final AccuWeatherClient _client;
+  final WeatherApiClient _client;
+  final MaptilerGeocodingClient _geocodingClient;
   final HiveService _hiveService;
 
   WeatherRepositoryImpl({
-    required AccuWeatherClient client,
+    required WeatherApiClient client,
+    required MaptilerGeocodingClient geocodingClient,
     required HiveService hiveService,
   }) : _client = client,
+       _geocodingClient = geocodingClient,
        _hiveService = hiveService;
 
   @override
@@ -39,35 +43,39 @@ class WeatherRepositoryImpl implements WeatherRepository {
 
   @override
   Future<List<Location>> searchLocations(String query) async {
-    return _client.searchLocations(query);
+    return _geocodingClient.searchLocations(query);
   }
 
   @override
   Future<Location?> getLocationFromGps() async {
-    bool serviceEnabled;
-    LocationPermission permission;
-
-    serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      return null;
+    // On web, skip isLocationServiceEnabled (browsers always report true and the
+    // call can stall on Chrome). On mobile/desktop, check it.
+    if (!kIsWeb) {
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) return null;
     }
 
-    permission = await Geolocator.checkPermission();
+    var permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) {
-        return null;
-      }
+      if (permission == LocationPermission.denied) return null;
     }
-
-    if (permission == LocationPermission.deniedForever) {
-      return null;
-    }
+    if (permission == LocationPermission.deniedForever) return null;
 
     try {
-      final position = await Geolocator.getCurrentPosition(
+      Position? position;
+
+      // Try last known position first — instant on platforms that support it.
+      if (!kIsWeb) {
+        position = await Geolocator.getLastKnownPosition();
+      }
+
+      // Fall back to current position with a short time limit so we don't hang
+      // on Chrome's throttled background tabs.
+      position ??= await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.medium,
+          accuracy: LocationAccuracy.low,
+          timeLimit: Duration(seconds: 10),
         ),
       );
 
@@ -76,19 +84,13 @@ class WeatherRepositoryImpl implements WeatherRepository {
       String? admin1;
 
       try {
-        final placemarks = await geocoding.placemarkFromCoordinates(
-          position.latitude,
-          position.longitude,
-        );
-        if (placemarks.isNotEmpty) {
-          final place = placemarks.first;
-          name =
-              place.locality ??
-              place.subAdministrativeArea ??
-              place.name ??
-              'Current Location';
+        final place = await _geocodingClient
+            .reverseGeocode(position.latitude, position.longitude)
+            .timeout(const Duration(seconds: 5));
+        if (place != null) {
+          name = place.name.isNotEmpty ? place.name : 'Current Location';
           country = place.country;
-          admin1 = place.administrativeArea;
+          admin1 = place.admin1;
         }
       } catch (e) {
         // Fallback to coordinates

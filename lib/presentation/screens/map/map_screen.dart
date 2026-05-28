@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:dio/dio.dart';
+import '../../../core/constants/app_constants.dart';
 import '../../../core/di/injection.dart';
 import '../../../core/constants/app_sl_constants.dart';
 import '../../../core/constants/weather_codes.dart';
@@ -20,38 +20,7 @@ class _MapScreenState extends State<MapScreen> {
   double _currentZoom = SLMapConstants.initialZoom;
   LatLng _currentCenter = SLMapConstants.center;
   LatLng? _gpsLocation;
-
-  String? _rainviewerPath;
   final DateTime _currentTime = DateTime.now();
-
-  @override
-  void initState() {
-    super.initState();
-    _fetchRainviewerData();
-  }
-
-  Future<void> _fetchRainviewerData() async {
-    try {
-      final response = await Dio().get(
-        'https://api.rainviewer.com/public/weather-maps.json',
-      );
-      if (response.statusCode == 200) {
-        final data = response.data;
-        if (data != null &&
-            data['radar'] != null &&
-            data['radar']['past'] != null) {
-          final past = data['radar']['past'] as List;
-          if (past.isNotEmpty) {
-            setState(() {
-              _rainviewerPath = past.last['path'];
-            });
-          }
-        }
-      }
-    } catch (e) {
-      debugPrint('Failed to load Rainviewer data: $e');
-    }
-  }
 
   void _zoomToMyLocation() {
     final target = _gpsLocation ?? SLMapConstants.center;
@@ -103,13 +72,27 @@ class _MapScreenState extends State<MapScreen> {
                     },
                   ),
                   children: [
+                    // Base: satellite-hybrid
                     TileLayer(
-                      urlTemplate:
-                          'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
-                      subdomains: const ['a', 'b', 'c', 'd'],
+                      urlTemplate: ApiConstants.mapTileHybrid,
                       userAgentPackageName: 'com.example.nerv_d_prevention',
                     ),
-                    _buildRainOverlay(),
+                    // Precipitation overlay
+                    TileLayer(
+                      urlTemplate: ApiConstants.owmPrecipitationOverlay,
+                      userAgentPackageName: 'com.example.nerv_d_prevention',
+                      tileDisplay: const TileDisplay.instantaneous(opacity: 0.6),
+                    ),
+                    RichAttributionWidget(
+                      animationConfig: const ScaleRAWA(),
+                      attributions: [
+                        TextSourceAttribution(
+                          '© OpenStreetMap contributors',
+                          onTap: () => {},
+                        ),
+                        TextSourceAttribution('© MapTiler', onTap: () => {}),
+                      ],
+                    ),
                     _buildUserLocationMarker(),
                   ],
                 ),
@@ -130,19 +113,11 @@ class _MapScreenState extends State<MapScreen> {
                 child: _buildWeatherChip(context),
               ),
 
-              // Map controls (right side)
+              // My Location button
               Positioned(
                 right: 16,
                 top: MediaQuery.of(context).padding.top + 80,
-                child: Column(
-                  children: [
-                    _buildMapButton(
-                      Icons.my_location,
-                      'My Location',
-                      _zoomToMyLocation,
-                    ),
-                  ],
-                ),
+                child: _buildMapButton(Icons.my_location, _zoomToMyLocation),
               ),
 
               // Bottom: Time Scrubber
@@ -269,43 +244,22 @@ class _MapScreenState extends State<MapScreen> {
 
   // ── Map Controls ────────────────────────────────────────────────────
 
-  Widget _buildMapButton(
-    IconData icon,
-    String tooltip,
-    VoidCallback onPressed,
-  ) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: GestureDetector(
-        onTap: onPressed,
-        child: Container(
-          width: 48,
-          height: 48,
-          decoration: BoxDecoration(
-            color: const Color(0xFF1A1E29),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-              color: Colors.white.withValues(alpha: 0.1),
-              width: 1,
-            ),
-          ),
-          child: Icon(
-            icon,
-            color: Colors.white.withValues(alpha: 0.8),
-            size: 24,
+  Widget _buildMapButton(IconData icon, VoidCallback onPressed) {
+    return GestureDetector(
+      onTap: onPressed,
+      child: Container(
+        width: 48,
+        height: 48,
+        decoration: BoxDecoration(
+          color: const Color(0xFF1A1E29),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: Colors.white.withValues(alpha: 0.1),
+            width: 1,
           ),
         ),
+        child: Icon(icon, color: Colors.white.withValues(alpha: 0.8), size: 24),
       ),
-    );
-  }
-
-  Widget _buildRainOverlay() {
-    if (_rainviewerPath == null) return const SizedBox.shrink();
-    return TileLayer(
-      urlTemplate:
-          'https://tilecache.rainviewer.com${_rainviewerPath!}/256/{z}/{x}/{y}/2/1_1.png',
-      subdomains: const [],
-      userAgentPackageName: 'com.example.nerv_d_prevention',
     );
   }
 
@@ -330,9 +284,8 @@ class _MapScreenState extends State<MapScreen> {
       ),
       child: Column(
         children: [
-          // Title
           const Text(
-            'Rain Radar — Sri Lanka',
+            'Weather Map — Sri Lanka',
             style: TextStyle(
               color: Colors.white,
               fontSize: 18,
@@ -340,7 +293,6 @@ class _MapScreenState extends State<MapScreen> {
             ),
           ),
           const SizedBox(height: 10),
-          // Color legend bar
           _buildColorLegend(),
         ],
       ),
@@ -352,7 +304,6 @@ class _MapScreenState extends State<MapScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Column(
         children: [
-          // Gradient bar
           Container(
             height: 12,
             decoration: BoxDecoration(
@@ -373,7 +324,6 @@ class _MapScreenState extends State<MapScreen> {
             ),
           ),
           const SizedBox(height: 4),
-          // Scale values
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -427,7 +377,6 @@ class _MapScreenState extends State<MapScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Now label + time + layer icon
           Row(
             children: [
               const SizedBox(width: 60),
@@ -450,19 +399,10 @@ class _MapScreenState extends State<MapScreen> {
                 ),
               ),
               const Spacer(),
-              // Layer toggle
-              GestureDetector(
-                onTap: () {},
-                child: const Icon(
-                  Icons.layers,
-                  color: Color(0xFF00BCD4),
-                  size: 28,
-                ),
-              ),
+              const Icon(Icons.layers, color: Color(0xFF00BCD4), size: 28),
             ],
           ),
           const SizedBox(height: 12),
-          // Time ticks
           _buildTimeTicks(now),
         ],
       ),

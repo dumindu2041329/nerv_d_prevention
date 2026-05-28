@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import '../../../core/constants/app_constants.dart';
 import '../../../core/di/injection.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_sl_constants.dart';
 import '../../../core/constants/weather_codes.dart';
 import '../../../core/utils/weather_alert_deriver.dart';
+import '../../../domain/entities/location.dart';
 import '../../blocs/weather/weather_bloc.dart';
 import '../../widgets/national_local_toggle.dart';
 import '../../widgets/stale_data_banner.dart';
@@ -17,7 +19,17 @@ class HomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
-      create: (_) => getIt<WeatherBloc>()..add(const LoadWeather()),
+      create: (_) => getIt<WeatherBloc>()..add(
+        LoadWeather(
+          location: const Location(
+            id: 'island_wide',
+            name: 'Sri Lanka',
+            country: 'Sri Lanka',
+            latitude: 7.8731,
+            longitude: 80.7718,
+          ),
+        ),
+      ),
       child: const HomeScreenContent(),
     );
   }
@@ -32,26 +44,29 @@ class HomeScreenContent extends StatefulWidget {
 
 class _HomeScreenContentState extends State<HomeScreenContent> {
   bool _isIslandWide = true;
-  SLDistrict? _selectedDistrict;
   final MapController _mapController = MapController();
   LatLng? _gpsLocation;
 
-  void _updateDistrict(bool isNational, SLDistrict? district) {
-    setState(() {
-      _isIslandWide = isNational;
-      _selectedDistrict = district;
-    });
-    // Animate map to new location
-    _mapController.move(
-      _mapCenterFor(isNational, district),
-      _mapZoomFor(isNational, district),
-    );
-    if (district != null) {
+  static const _colombo = LatLng(6.9271, 79.8612);
+
+  void _onToggleChanged(bool isNational) {
+    setState(() => _isIslandWide = isNational);
+    if (isNational) {
+      _mapController.move(_colombo, SLMapConstants.initialZoom);
       context.read<WeatherBloc>().add(
-        LoadWeatherForDistrict(district: district),
+        LoadWeather(
+          location: const Location(
+            id: 'island_wide',
+            name: 'Sri Lanka',
+            country: 'Sri Lanka',
+            latitude: 7.8731,
+            longitude: 80.7718,
+          ),
+        ),
       );
     } else {
-      context.read<WeatherBloc>().add(const LoadWeather());
+      _mapController.move(_gpsLocation ?? _colombo, 12.0);
+      context.read<WeatherBloc>().add(const LoadWeather(useGps: true));
     }
   }
 
@@ -59,48 +74,35 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
   Widget build(BuildContext context) {
     return BlocListener<WeatherBloc, WeatherState>(
       listener: (context, state) {
-        if (state is WeatherLoaded && state.location != null) {
+        if (!_isIslandWide && state is WeatherLoaded && state.location != null) {
           final loc = state.location!;
           final newLatLng = LatLng(loc.latitude, loc.longitude);
           if (_gpsLocation != newLatLng) {
-            setState(() {
-              _gpsLocation = newLatLng;
-            });
-            if (_isIslandWide && _selectedDistrict == null) {
-              _mapController.move(
-                newLatLng,
-                _mapZoomFor(_isIslandWide, _selectedDistrict),
-              );
-            }
+            setState(() => _gpsLocation = newLatLng);
+            _mapController.move(newLatLng, 12.0);
           }
         }
       },
       child: Scaffold(
-      backgroundColor: Colors.black,
-      body: Column(
-        children: [
-          // Top toggle bar — Island-wide / District
-          SafeArea(
-            bottom: false,
-            child: NationalLocalToggle(
-              isNational: _isIslandWide,
-              selectedDistrict: _selectedDistrict,
-              onChanged: (isNational) {
-                _updateDistrict(isNational, null);
-              },
-              onDistrictSelected: (district) {
-                _updateDistrict(false, district);
-              },
+        backgroundColor: Colors.black,
+        body: Column(
+          children: [
+            // Top toggle bar — Island-wide / Local
+            SafeArea(
+              bottom: false,
+              child: NationalLocalToggle(
+                isNational: _isIslandWide,
+                onChanged: _onToggleChanged,
+              ),
             ),
-          ),
-          // Support banner
-          _buildSupporterBanner(context),
-          // Map section
-          Expanded(flex: 55, child: _buildMapSection(context)),
-          // Weather & Alert section
-          Expanded(flex: 45, child: _buildWeatherAlertSection(context)),
-        ],
-      ),
+            // Support banner
+            _buildSupporterBanner(context),
+            // Map section
+            Expanded(flex: 55, child: _buildMapSection(context)),
+            // Weather & Alert section
+            Expanded(flex: 45, child: _buildWeatherAlertSection(context)),
+          ],
+        ),
       ),
     );
   }
@@ -152,27 +154,7 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
 
   // ── Map ──────────────────────────────────────────────────────────────
 
-  LatLng _mapCenterFor(bool isNational, SLDistrict? district) {
-    if (!isNational && district != null) {
-      return district.center;
-    }
-    if (_gpsLocation != null) {
-      return _gpsLocation!;
-    }
-    return SLMapConstants.center;
-  }
-
-  double _mapZoomFor(bool isNational, SLDistrict? district) {
-    if (!isNational && district != null) {
-      return 10.0;
-    }
-    return SLMapConstants.initialZoom;
-  }
-
   Widget _buildMapSection(BuildContext context) {
-    final markerPoint = _gpsLocation ??
-        _mapCenterFor(_isIslandWide, _selectedDistrict);
-
     return Column(
       children: [
         // Rainbow gradient line
@@ -196,8 +178,8 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
           child: FlutterMap(
             mapController: _mapController,
             options: MapOptions(
-              initialCenter: _mapCenterFor(_isIslandWide, _selectedDistrict),
-              initialZoom: _mapZoomFor(_isIslandWide, _selectedDistrict),
+              initialCenter: _isIslandWide ? SLMapConstants.center : (_gpsLocation ?? SLMapConstants.center),
+              initialZoom: _isIslandWide ? SLMapConstants.initialZoom : 12.0,
               minZoom: SLMapConstants.minZoom,
               maxZoom: SLMapConstants.maxZoom,
               interactionOptions: const InteractionOptions(
@@ -206,21 +188,26 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
             ),
             children: [
               TileLayer(
-                urlTemplate:
-                    'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
-                subdomains: const ['a', 'b', 'c', 'd'],
+                urlTemplate: ApiConstants.mapTileHybrid,
                 userAgentPackageName: 'com.example.nerv_d_prevention',
               ),
-              MarkerLayer(
-                markers: [
-                  Marker(
-                    width: 40,
-                    height: 40,
-                    point: markerPoint,
-                    child: _buildLocationMarker(),
-                  ),
-                ],
+              TileLayer(
+                urlTemplate: ApiConstants.owmPrecipitationOverlay,
+                userAgentPackageName: 'com.example.nerv_d_prevention',
+                tileDisplay: const TileDisplay.instantaneous(opacity: 0.6),
               ),
+              // Only show location marker in Local mode
+              if (!_isIslandWide && _gpsLocation != null)
+                MarkerLayer(
+                  markers: [
+                    Marker(
+                      width: 40,
+                      height: 40,
+                      point: _gpsLocation!,
+                      child: _buildLocationMarker(),
+                    ),
+                  ],
+                ),
             ],
           ),
         ),
@@ -280,7 +267,7 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
     final current = data.current;
     final alerts = WeatherAlertDeriver.deriveAlerts(
       data,
-      districtName: state.selectedDistrict?.displayName,
+      districtName: state.location?.name,
     );
 
     return ListView(
@@ -297,7 +284,7 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
         Text(
           _isIslandWide
               ? 'Island-wide'
-              : _selectedDistrict?.displayName ?? 'District',
+              : state.location?.name ?? 'Local',
           style: const TextStyle(
             color: Colors.white,
             fontSize: 24,
