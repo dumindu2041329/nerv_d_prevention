@@ -19,8 +19,8 @@ class WeatherCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final weatherCode = weather.weatherCode;
-    final weatherIcon = WeatherCodeMapping.getIcon(weatherCode);
-    final weatherDesc = WeatherCodeMapping.getDescription(weatherCode);
+    final weatherIcon = WeatherCodeMapping.getIcon(weatherCode, isDay: weather.isDay);
+    final weatherDesc = WeatherCodeMapping.getDescription(weatherCode, isDay: weather.isDay);
 
     return GestureDetector(
       onTap: onTap,

@@ -326,8 +326,8 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
     final feelsLike = current.apparentTemperature;
     final humidity = current.humidity;
     final windSpeed = current.windSpeed;
-    final weatherDesc = WeatherCodeMapping.getDescription(current.weatherCode);
-    final weatherEmoji = WeatherCodeMapping.getIcon(current.weatherCode);
+    final weatherDesc = WeatherCodeMapping.getDescription(current.weatherCode, isDay: current.isDay);
+    final weatherEmoji = WeatherCodeMapping.getIcon(current.weatherCode, isDay: current.isDay);
 
     return Container(
       padding: const EdgeInsets.all(16),

@@ -51,6 +51,7 @@ class WeatherApiClient {
       temperature: (c['temp_c'] as num).toDouble(),
       apparentTemperature: (c['feelslike_c'] as num).toDouble(),
       weatherCode: (c['condition']['code'] as num).toInt(),
+      isDay: (c['is_day'] as num? ?? 1) == 1,
       windSpeed: (c['wind_kph'] as num).toDouble(),
       windDirection: (c['wind_degree'] as num).toDouble(),
       humidity: (c['humidity'] as num).toDouble(),

@@ -194,7 +194,7 @@ class _MapScreenState extends State<MapScreen> {
       builder: (context, state) {
         if (state is WeatherLoaded) {
           final current = state.weatherData.current;
-          final emoji = WeatherCodeMapping.getIcon(current.weatherCode);
+          final emoji = WeatherCodeMapping.getIcon(current.weatherCode, isDay: current.isDay);
           final locationName = state.location?.name ?? 'Current Location';
 
           return Container(

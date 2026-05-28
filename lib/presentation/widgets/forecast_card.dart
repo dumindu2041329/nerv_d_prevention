@@ -59,7 +59,7 @@ class ForecastCard extends StatelessWidget {
   Widget _buildDayRow(BuildContext context, DailyWeather day) {
     final theme = Theme.of(context);
     final isToday = _isToday(day.time);
-    final weatherIcon = WeatherCodeMapping.getIcon(day.weatherCode);
+    final weatherIcon = WeatherCodeMapping.getIcon(day.weatherCode, isDay: true);
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.space2),

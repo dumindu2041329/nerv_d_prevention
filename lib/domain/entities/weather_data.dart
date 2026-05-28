@@ -24,6 +24,7 @@ class CurrentWeather extends Equatable {
   final double temperature;
   final double apparentTemperature;
   final int weatherCode;
+  final bool isDay;
   final double windSpeed;
   final double windDirection;
   final double humidity;
@@ -37,6 +38,7 @@ class CurrentWeather extends Equatable {
     required this.temperature,
     required this.apparentTemperature,
     required this.weatherCode,
+    this.isDay = true,
     required this.windSpeed,
     required this.windDirection,
     required this.humidity,
@@ -52,6 +54,7 @@ class CurrentWeather extends Equatable {
         temperature,
         apparentTemperature,
         weatherCode,
+        isDay,
         windSpeed,
         windDirection,
         humidity,

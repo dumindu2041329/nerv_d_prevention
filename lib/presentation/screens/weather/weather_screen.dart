@@ -239,8 +239,8 @@ class _WeatherScreenState extends State<WeatherScreen> {
   // ── Current Conditions Detail ──────────────────────────────────────
 
   Widget _buildCurrentConditionsDetail(dynamic current, String locationName) {
-    final weatherDesc = WeatherCodeMapping.getDescription(current.weatherCode);
-    final weatherEmoji = WeatherCodeMapping.getIcon(current.weatherCode);
+    final weatherDesc = WeatherCodeMapping.getDescription(current.weatherCode, isDay: current.isDay);
+    final weatherEmoji = WeatherCodeMapping.getIcon(current.weatherCode, isDay: current.isDay);
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
@@ -444,7 +444,8 @@ class _WeatherScreenState extends State<WeatherScreen> {
   }
 
   Widget _buildHourlyChip(dynamic hour) {
-    final emoji = WeatherCodeMapping.getIcon(hour.weatherCode);
+    final hourIsDay = hour.time.hour >= 6 && hour.time.hour < 18;
+    final emoji = WeatherCodeMapping.getIcon(hour.weatherCode, isDay: hourIsDay);
     final timeLabel = DateTimeUtils.formatTime(hour.time);
 
     return Container(
@@ -524,8 +525,8 @@ class _WeatherScreenState extends State<WeatherScreen> {
   }
 
   Widget _buildDailyCard(dynamic day, int index, bool isLast) {
-    final emoji = WeatherCodeMapping.getIcon(day.weatherCode);
-    final desc = WeatherCodeMapping.getDescription(day.weatherCode);
+    final emoji = WeatherCodeMapping.getIcon(day.weatherCode, isDay: true);
+    final desc = WeatherCodeMapping.getDescription(day.weatherCode, isDay: true);
 
     String dayLabel;
     if (index == 0) {

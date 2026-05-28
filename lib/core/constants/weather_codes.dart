@@ -51,21 +51,62 @@ class WeatherCodeMapping {
     1282: 'Thunderstorm with Heavy Snow',
   };
 
-  static String getDescription(int code) =>
-      _codeToDescription[code] ?? 'Unknown';
+  static String getDescription(int code, {bool isDay = true}) {
+    if (code == 1000) return isDay ? 'Sunny' : 'Clear';
+    return _codeToDescription[code] ?? 'Unknown';
+  }
 
-  static String getIcon(int code) {
-    if (code == 1000) return '☀️';
-    if (code == 1003) return '⛅';
-    if (code == 1006 || code == 1009) return '☁️';
-    if (code == 1030 || code == 1135 || code == 1147) return '🌫️';
-    if (code >= 1063 && code <= 1072) return '🌦️';
-    if (code == 1087 || code == 1273 || code == 1276 || code == 1279 || code == 1282) return '⛈️';
-    if (code == 1114 || code == 1117) return '🌨️';
-    if (code >= 1150 && code <= 1201) return '🌧️';
-    if (code >= 1204 && code <= 1237) return '🌨️';
-    if (code >= 1240 && code <= 1246) return '🌧️';
-    if (code >= 1249 && code <= 1264) return '🌨️';
-    return '❓';
+  static String getIcon(int code, {bool isDay = true}) {
+    switch (code) {
+      case 1000: return isDay ? '☀️' : '🌙';
+      case 1003: return isDay ? '⛅' : '🌙';
+      case 1006:
+      case 1009: return '☁️';
+      case 1030:
+      case 1135:
+      case 1147: return '🌫️';
+      case 1063:
+      case 1180:
+      case 1183:
+      case 1186:
+      case 1189:
+      case 1192:
+      case 1195:
+      case 1240:
+      case 1243:
+      case 1246: return '🌧️';
+      case 1066:
+      case 1114:
+      case 1117:
+      case 1210:
+      case 1213:
+      case 1216:
+      case 1219:
+      case 1222:
+      case 1225:
+      case 1255:
+      case 1258: return '🌨️';
+      case 1069:
+      case 1072:
+      case 1150:
+      case 1153:
+      case 1168:
+      case 1171:
+      case 1198:
+      case 1201:
+      case 1204:
+      case 1207:
+      case 1249:
+      case 1252: return '🌧️';
+      case 1237:
+      case 1261:
+      case 1264: return '🧊';
+      case 1087:
+      case 1273:
+      case 1276:
+      case 1279:
+      case 1282: return '⛈️';
+      default: return '🌡️';
+    }
   }
 }
