@@ -18,11 +18,23 @@ class TimelineScreen extends StatefulWidget {
 
 class _TimelineScreenState extends State<TimelineScreen> {
   bool _isIslandWide = true;
+  late final WeatherBloc _weatherBloc = getIt<WeatherBloc>()
+    ..add(
+      LoadWeather(
+        location: const Location(
+          id: 'island_wide',
+          name: 'Sri Lanka',
+          country: 'Sri Lanka',
+          latitude: 7.8731,
+          longitude: 80.7718,
+        ),
+      ),
+    );
 
   void _onToggleChanged(bool isNational) {
     setState(() => _isIslandWide = isNational);
     if (isNational) {
-      context.read<WeatherBloc>().add(
+      _weatherBloc.add(
         LoadWeather(
           location: const Location(
             id: 'island_wide',
@@ -34,24 +46,20 @@ class _TimelineScreenState extends State<TimelineScreen> {
         ),
       );
     } else {
-      context.read<WeatherBloc>().add(const LoadWeather(useGps: true));
+      _weatherBloc.add(const LoadWeather(useGps: true));
     }
   }
 
   @override
+  void dispose() {
+    _weatherBloc.close();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return BlocProvider(
-      create: (_) => getIt<WeatherBloc>()..add(
-        LoadWeather(
-          location: const Location(
-            id: 'island_wide',
-            name: 'Sri Lanka',
-            country: 'Sri Lanka',
-            latitude: 7.8731,
-            longitude: 80.7718,
-          ),
-        ),
-      ),
+    return BlocProvider.value(
+      value: _weatherBloc,
       child: Scaffold(
         backgroundColor: Colors.black,
         body: SafeArea(
