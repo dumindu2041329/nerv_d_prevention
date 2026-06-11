@@ -54,7 +54,7 @@ class WeatherBloc extends Bloc<WeatherEvent, WeatherState> {
     try {
       Location location = event.location;
 
-      if (location.isGps) {
+      if (location.isGps && location.latitude == 0 && location.longitude == 0) {
         final gpsLocation = await _weatherRepository.getLocationFromGps();
         if (gpsLocation != null) {
           location = gpsLocation;

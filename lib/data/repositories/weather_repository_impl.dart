@@ -29,7 +29,9 @@ class WeatherRepositoryImpl implements WeatherRepository {
   }) async {
     if (!forceRefresh && await isCacheValid()) {
       final cached = await getCachedWeatherData();
-      if (cached != null) return cached;
+      if (cached != null) {
+        return cached;
+      }
     }
 
     final data = await _client.getWeatherData(

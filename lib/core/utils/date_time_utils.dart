@@ -5,8 +5,16 @@ class DateTimeUtils {
     return DateFormat('HH:mm').format(dateTime);
   }
 
+  static String formatTimeUtc(DateTime dateTime) {
+    return DateFormat('HH:mm').format(dateTime.toUtc());
+  }
+
   static String formatDate(DateTime dateTime) {
     return DateFormat('MMM d').format(dateTime);
+  }
+
+  static String formatDateUtc(DateTime dateTime) {
+    return DateFormat('MMM d').format(dateTime.toUtc());
   }
 
   static String formatDateShort(DateTime dateTime) {

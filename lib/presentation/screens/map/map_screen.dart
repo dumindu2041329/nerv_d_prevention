@@ -6,6 +6,8 @@ import '../../../core/constants/app_constants.dart';
 import '../../../core/di/injection.dart';
 import '../../../core/constants/app_sl_constants.dart';
 import '../../../core/constants/weather_codes.dart';
+import '../../../core/utils/date_time_utils.dart';
+import '../../../domain/entities/weather_data.dart';
 import '../../blocs/weather/weather_bloc.dart';
 
 class MapScreen extends StatefulWidget {
@@ -16,21 +18,145 @@ class MapScreen extends StatefulWidget {
 }
 
 class _MapScreenState extends State<MapScreen> {
+  static const int _minutesStep = 5;
+
   final MapController _mapController = MapController();
+  late final WeatherBloc _weatherBloc;
   double _currentZoom = SLMapConstants.initialZoom;
   LatLng _currentCenter = SLMapConstants.center;
   LatLng? _gpsLocation;
-  final DateTime _currentTime = DateTime.now();
+  int _selectedSlotIndex = 0;
+  double _dragAccumulator = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _weatherBloc = getIt<WeatherBloc>()..add(const LoadWeather(useGps: true));
+  }
+
+  @override
+  void dispose() {
+    _weatherBloc.close();
+    super.dispose();
+  }
 
   void _zoomToMyLocation() {
     final target = _gpsLocation ?? SLMapConstants.center;
     _mapController.move(target, 12.0);
   }
 
+  /// Expands the hourly forecast into 5-minute slots via linear interpolation
+  /// between adjacent hours. Returns 12*12 + 1 = 145 slots spanning 12 hours.
+  /// The last hour is anchored by the first hour of the next day if present.
+  List<_FiveMinSlot> _buildFiveMinSlots(List<HourlyWeather> hourly) {
+    if (hourly.isEmpty) return const [];
+
+    // Anchor with a synthetic "previous hour" at time[0] - 1h so the first
+    // 5-minute step of the first real hour has a partner to interpolate from.
+    final base = <_FiveMinSlot>[];
+    final firstTime = hourly.first.time;
+    final prevTime = firstTime.subtract(const Duration(hours: 1));
+    final prevTemp = hourly.first.temperature;
+    final prevPrecip = hourly.first.precipitation;
+    final prevPop = hourly.first.precipitationProbability;
+    final prevWind = hourly.first.windSpeed;
+    final prevGust = hourly.first.windGusts;
+    final prevUv = hourly.first.uvIndex;
+    final prevHum = hourly.first.humidity;
+
+    for (int i = 0; i < hourly.length; i++) {
+      final curr = hourly[i];
+      _FiveMinSlot? next;
+      if (i + 1 < hourly.length) {
+        final n = hourly[i + 1];
+        next = _FiveMinSlot(
+          time: n.time,
+          temperature: n.temperature,
+          precipitation: n.precipitation,
+          precipitationProbability: n.precipitationProbability,
+          windSpeed: n.windSpeed,
+          windGusts: n.windGusts,
+          weatherCode: n.weatherCode,
+          uvIndex: n.uvIndex,
+          humidity: n.humidity,
+        );
+      }
+
+      // 12 sub-slots stepping from the previous anchor to this hour (inclusive)
+      _FiveMinSlot anchor;
+      if (i == 0) {
+        anchor = _FiveMinSlot(
+          time: prevTime,
+          temperature: prevTemp,
+          precipitation: prevPrecip,
+          precipitationProbability: prevPop,
+          windSpeed: prevWind,
+          windGusts: prevGust,
+          weatherCode: curr.weatherCode,
+          uvIndex: prevUv,
+          humidity: prevHum,
+        );
+      } else {
+        anchor = _FiveMinSlot(
+          time: hourly[i - 1].time,
+          temperature: hourly[i - 1].temperature,
+          precipitation: hourly[i - 1].precipitation,
+          precipitationProbability: hourly[i - 1].precipitationProbability,
+          windSpeed: hourly[i - 1].windSpeed,
+          windGusts: hourly[i - 1].windGusts,
+          weatherCode: curr.weatherCode,
+          uvIndex: hourly[i - 1].uvIndex,
+          humidity: hourly[i - 1].humidity,
+        );
+      }
+
+      final start = anchor.time;
+      final end = curr.time;
+      final totalMinutes = end.difference(start).inMinutes.clamp(1, 60);
+      final steps = (totalMinutes / _minutesStep).floor();
+
+      for (int s = 0; s < steps; s++) {
+        final t = s / steps;
+        base.add(_FiveMinSlot(
+          time: start.add(Duration(minutes: s * _minutesStep)),
+          temperature: _lerp(anchor.temperature, curr.temperature, t),
+          precipitation: _lerp(anchor.precipitation, curr.precipitation, t),
+          precipitationProbability:
+              _lerp(anchor.precipitationProbability, curr.precipitationProbability, t),
+          windSpeed: _lerp(anchor.windSpeed, curr.windSpeed, t),
+          windGusts: _lerp(anchor.windGusts, curr.windGusts, t),
+          weatherCode: curr.weatherCode,
+          uvIndex: _lerp(anchor.uvIndex, curr.uvIndex, t),
+          humidity: _lerp(anchor.humidity, curr.humidity, t),
+        ));
+      }
+
+      // Always include the exact hour mark.
+      base.add(_FiveMinSlot(
+        time: curr.time,
+        temperature: curr.temperature,
+        precipitation: curr.precipitation,
+        precipitationProbability: curr.precipitationProbability,
+        windSpeed: curr.windSpeed,
+        windGusts: curr.windGusts,
+        weatherCode: curr.weatherCode,
+        uvIndex: curr.uvIndex,
+        humidity: curr.humidity,
+      ));
+
+      // If no next hour to anchor to, stop after 12 hours total.
+      if (next == null) break;
+    }
+
+    return base;
+  }
+
+  double _lerp(double a, double b, double t) => a + (b - a) * t;
+
   @override
   Widget build(BuildContext context) {
-    return BlocProvider(
-      create: (_) => getIt<WeatherBloc>()..add(const LoadWeather()),
+    return BlocProvider.value(
+      value: _weatherBloc,
       child: BlocListener<WeatherBloc, WeatherState>(
         listener: (context, state) {
           if (state is WeatherLoaded && state.location != null) {
@@ -40,11 +166,13 @@ class _MapScreenState extends State<MapScreen> {
               setState(() {
                 _gpsLocation = newLatLng;
                 _currentCenter = newLatLng;
+                _selectedSlotIndex = 0;
               });
               _mapController.move(newLatLng, 12.0);
             } else if (_gpsLocation != newLatLng) {
               setState(() {
                 _gpsLocation = newLatLng;
+                _selectedSlotIndex = 0;
               });
             }
           }
@@ -193,8 +321,14 @@ class _MapScreenState extends State<MapScreen> {
     return BlocBuilder<WeatherBloc, WeatherState>(
       builder: (context, state) {
         if (state is WeatherLoaded) {
-          final current = state.weatherData.current;
-          final emoji = WeatherCodeMapping.getIcon(current.weatherCode, isDay: current.isDay);
+          final slots = _buildFiveMinSlots(state.weatherData.hourly);
+          final selectedIndex = _clampIndex(_selectedSlotIndex, slots.length);
+          final selected = slots.isNotEmpty ? slots[selectedIndex] : null;
+
+          final weatherCode = selected?.weatherCode ?? state.weatherData.current.weatherCode;
+          final temp = selected?.temperature ?? state.weatherData.current.temperature;
+          final time = selected?.time ?? state.weatherData.current.time;
+          final emoji = WeatherCodeMapping.getIcon(weatherCode, isDay: _isDay(time));
           final locationName = state.location?.name ?? 'Current Location';
 
           return Container(
@@ -217,7 +351,7 @@ class _MapScreenState extends State<MapScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      '${current.temperature.toStringAsFixed(0)}°C',
+                      '${temp.toStringAsFixed(0)}°C',
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 18,
@@ -225,7 +359,7 @@ class _MapScreenState extends State<MapScreen> {
                       ),
                     ),
                     Text(
-                      locationName,
+                      '$locationName · ${DateTimeUtils.formatTime(time)}',
                       style: TextStyle(
                         color: Colors.white.withValues(alpha: 0.5),
                         fontSize: 10,
@@ -354,79 +488,109 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   Widget _buildTimeScrubber(BuildContext context) {
-    final now = _currentTime;
-    final hour = now.hour.toString().padLeft(2, '0');
-    final minute = (now.minute ~/ 10 * 10).toString().padLeft(2, '0');
+    return BlocBuilder<WeatherBloc, WeatherState>(
+      builder: (context, state) {
+        final bottomPadding = MediaQuery.of(context).padding.bottom;
+        final slots = state is WeatherLoaded
+            ? _buildFiveMinSlots(state.weatherData.hourly)
+            : const <_FiveMinSlot>[];
 
-    return Container(
-      padding: EdgeInsets.only(
-        left: 16,
-        right: 16,
-        top: 16,
-        bottom: MediaQuery.of(context).padding.bottom + 16,
-      ),
-      decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.92),
-        border: Border(
-          top: BorderSide(
-            color: Colors.white.withValues(alpha: 0.08),
-            width: 0.5,
+        final selectedIndex = _clampIndex(_selectedSlotIndex, slots.length);
+        final selectedTime =
+            slots.isNotEmpty ? slots[selectedIndex].time : DateTime.now();
+        final isNow =
+            selectedTime.difference(DateTime.now()).abs().inMinutes <= 30;
+
+        return Container(
+          padding: EdgeInsets.only(
+            left: 16,
+            right: 16,
+            top: 16,
+            bottom: bottomPadding + 16,
           ),
-        ),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
+          decoration: BoxDecoration(
+            color: Colors.black.withValues(alpha: 0.92),
+            border: Border(
+              top: BorderSide(
+                color: Colors.white.withValues(alpha: 0.08),
+                width: 0.5,
+              ),
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              const SizedBox(width: 60),
-              const Text(
-                'Now',
-                style: TextStyle(
-                  color: Color(0xFF00BCD4),
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                ),
+              Row(
+                children: [
+                  const SizedBox(width: 60),
+                  Text(
+                    isNow ? 'Now · UTC' : '${DateTimeUtils.formatDateUtc(selectedTime)} · UTC',
+                    style: const TextStyle(
+                      color: Color(0xFF00BCD4),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Text(
+                    DateTimeUtils.formatTimeUtc(selectedTime),
+                    style: const TextStyle(
+                      color: Color(0xFF00BCD4),
+                      fontSize: 36,
+                      fontWeight: FontWeight.w300,
+                      letterSpacing: 2,
+                    ),
+                  ),
+                  const Spacer(),
+                  const Icon(Icons.layers, color: Color(0xFF00BCD4), size: 28),
+                ],
               ),
-              const SizedBox(width: 16),
-              Text(
-                '$hour:$minute',
-                style: const TextStyle(
-                  color: Color(0xFF00BCD4),
-                  fontSize: 36,
-                  fontWeight: FontWeight.w300,
-                  letterSpacing: 2,
+              const SizedBox(height: 10),
+              if (slots.length > 1)
+                SliderTheme(
+                  data: SliderTheme.of(context).copyWith(
+                    trackHeight: 2,
+                    activeTrackColor: const Color(0xFF00BCD4),
+                    inactiveTrackColor: Colors.white.withValues(alpha: 0.22),
+                    thumbColor: const Color(0xFF00BCD4),
+                    overlayColor: const Color(0xFF00BCD4).withValues(alpha: 0.18),
+                    thumbShape: const _ScrubberThumbShape(),
+                  ),
+                  child: Slider(
+                    value: selectedIndex.toDouble(),
+                    min: 0,
+                    max: (slots.length - 1).toDouble(),
+                    divisions: slots.length - 1,
+                    onChanged: (v) {
+                      setState(() => _selectedSlotIndex = v.round());
+                    },
+                  ),
+                )
+              else
+                Container(
+                  height: 24,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.04),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
                 ),
-              ),
-              const Spacer(),
-              const Icon(Icons.layers, color: Color(0xFF00BCD4), size: 28),
+              const SizedBox(height: 8),
+              if (slots.isNotEmpty)
+                _buildSlotTicks(slots, selectedIndex)
+              else
+                _buildTimeTicksSkeleton(),
             ],
           ),
-          const SizedBox(height: 12),
-          _buildTimeTicks(now),
-        ],
-      ),
+        );
+      },
     );
   }
 
-  Widget _buildTimeTicks(DateTime now) {
-    final startMinute = (now.minute ~/ 10 * 10) - 30;
-    final startTime = DateTime(
-      now.year,
-      now.month,
-      now.day,
-      now.hour,
-      0,
-    ).add(Duration(minutes: startMinute));
-
+  Widget _buildTimeTicksSkeleton() {
     return SizedBox(
       height: 36,
       child: Row(
         children: List.generate(13, (index) {
-          final tickTime = startTime.add(Duration(minutes: index * 5));
-          final isCurrentTick =
-              tickTime.hour == now.hour &&
-              (tickTime.minute ~/ 10) == (now.minute ~/ 10);
           final showLabel = index % 2 == 0;
 
           return Expanded(
@@ -434,9 +598,9 @@ class _MapScreenState extends State<MapScreen> {
               children: [
                 if (showLabel)
                   Text(
-                    '${tickTime.hour.toString().padLeft(2, '0')}:${tickTime.minute.toString().padLeft(2, '0')}',
+                    '--:--',
                     style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.4),
+                      color: Colors.white.withValues(alpha: 0.25),
                       fontSize: 10,
                     ),
                   )
@@ -444,12 +608,10 @@ class _MapScreenState extends State<MapScreen> {
                   const SizedBox(height: 12),
                 const SizedBox(height: 2),
                 Container(
-                  width: isCurrentTick ? 4 : 2,
-                  height: isCurrentTick ? 18 : 14,
+                  width: 2,
+                  height: 14,
                   decoration: BoxDecoration(
-                    color: isCurrentTick
-                        ? const Color(0xFF00BCD4)
-                        : Colors.white.withValues(alpha: 0.3),
+                    color: Colors.white.withValues(alpha: 0.16),
                     borderRadius: BorderRadius.circular(1),
                   ),
                 ),
@@ -459,5 +621,150 @@ class _MapScreenState extends State<MapScreen> {
         }),
       ),
     );
+  }
+
+  Widget _buildSlotTicks(List<_FiveMinSlot> slots, int selectedIndex) {
+    final count = slots.length;
+    if (count == 0) return _buildTimeTicksSkeleton();
+
+    final windowSize = count < 25 ? count : 25;
+    final half = windowSize ~/ 2;
+    final maxStart = (count - windowSize).clamp(0, count);
+    var startIndex = (selectedIndex - half).clamp(0, maxStart);
+    var endIndex = startIndex + windowSize;
+    if (endIndex > count) {
+      endIndex = count;
+      startIndex = (endIndex - windowSize).clamp(0, maxStart);
+    }
+
+    void setIndex(int index) {
+      setState(() => _selectedSlotIndex = index.clamp(0, count - 1));
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTapDown: (details) {
+            final dx = details.localPosition.dx.clamp(0, constraints.maxWidth);
+            if (constraints.maxWidth <= 0) return;
+            final ratio = dx / constraints.maxWidth;
+            final idxInWindow =
+                (ratio * windowSize).floor().clamp(0, windowSize - 1);
+            setIndex(startIndex + idxInWindow);
+          },
+          onHorizontalDragStart: (_) => _dragAccumulator = 0,
+          onHorizontalDragUpdate: (details) {
+            final delta = details.primaryDelta ?? 0;
+            _dragAccumulator += delta;
+            const stepPx = 6.0;
+            final steps = (_dragAccumulator / stepPx).truncate();
+            if (steps != 0) {
+              _dragAccumulator -= steps * stepPx;
+              setIndex(selectedIndex + steps);
+            }
+          },
+          onHorizontalDragEnd: (_) => _dragAccumulator = 0,
+          child: SizedBox(
+            height: 36,
+            child: Row(
+              children: [
+                for (int i = startIndex; i < endIndex; i++)
+                  Expanded(
+                    child: Column(
+                      children: [
+                        if ((i - startIndex) % 6 == 0)
+                          Text(
+                            DateTimeUtils.formatTimeUtc(slots[i].time),
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.4),
+                              fontSize: 10,
+                            ),
+                          )
+                        else
+                          const SizedBox(height: 12),
+                        const SizedBox(height: 2),
+                        Container(
+                          width: i == selectedIndex ? 4 : 2,
+                          height: i == selectedIndex ? 18 : 14,
+                          decoration: BoxDecoration(
+                            color:
+                                i == selectedIndex
+                                    ? const Color(0xFF00BCD4)
+                                    : Colors.white.withValues(alpha: 0.3),
+                            borderRadius: BorderRadius.circular(1),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  int _clampIndex(int index, int length) {
+    if (length <= 0) return 0;
+    return index.clamp(0, length - 1);
+  }
+
+  bool _isDay(DateTime time) => time.hour >= 6 && time.hour < 18;
+}
+
+class _FiveMinSlot {
+  final DateTime time;
+  final double temperature;
+  final double precipitation;
+  final double precipitationProbability;
+  final double windSpeed;
+  final double windGusts;
+  final int weatherCode;
+  final double uvIndex;
+  final double humidity;
+
+  const _FiveMinSlot({
+    required this.time,
+    required this.temperature,
+    required this.precipitation,
+    required this.precipitationProbability,
+    required this.windSpeed,
+    required this.windGusts,
+    required this.weatherCode,
+    required this.uvIndex,
+    required this.humidity,
+  });
+}
+
+class _ScrubberThumbShape extends SliderComponentShape {
+  const _ScrubberThumbShape();
+
+  @override
+  Size getPreferredSize(bool isEnabled, bool isDiscrete) => const Size(10, 24);
+
+  @override
+  void paint(
+    PaintingContext context,
+    Offset center, {
+    required Animation<double> activationAnimation,
+    required Animation<double> enableAnimation,
+    required bool isDiscrete,
+    required TextPainter labelPainter,
+    required RenderBox parentBox,
+    required SliderThemeData sliderTheme,
+    required TextDirection textDirection,
+    required double value,
+    required double textScaleFactor,
+    required Size sizeWithOverflow,
+  }) {
+    final paint =
+        Paint()
+          ..color = sliderTheme.thumbColor ?? const Color(0xFF00BCD4)
+          ..style = PaintingStyle.fill;
+    final rect = Rect.fromCenter(center: center, width: 4, height: 22);
+    final rrect = RRect.fromRectAndRadius(rect, const Radius.circular(1.5));
+    context.canvas.drawRRect(rrect, paint);
   }
 }
