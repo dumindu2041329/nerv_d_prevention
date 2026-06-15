@@ -4,7 +4,7 @@
 
 ## Architecture
 
-Map tiles are proxied through the Shelf backend, matching the existing AccuWeather pattern. The API key stays server-side in [`backend/.env`](backend/.env).
+Map tiles are proxied through the Shelf backend, matching the existing pattern. The API key stays server-side in [`backend/.env`](backend/.env).
 
 ```
 flutter_map → http://localhost:8080/tiles/{z}/{x}/{y} → api.maptiler.com (with key)

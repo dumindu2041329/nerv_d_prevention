@@ -5,7 +5,7 @@
 **Last Updated:** May 27, 2026
 **Platform:** Flutter (iOS, Android, Web, Windows, macOS, Linux)
 **Inspired By:** nerv.app/en — Gehirn Inc.
-**Weather Data Provider:** AccuWeather API (via backend proxy)
+**Weather Data Provider:** WeatherAPI.com (called directly from the Flutter client)
 **Target Region:** Sri Lanka (25 districts, DMC alert types)
 
 ---
@@ -51,7 +51,7 @@
 
 This PRD defines the complete requirements for a Flutter-based disaster prevention and weather alert mobile application inspired by Japan's NERV Disaster Prevention App. The app delivers real-time weather data, derived emergency-level alerts, rain radar mapping, and a timeline of weather events in a tactical, high-contrast dark UI.
 
-**Weather data** is sourced from **AccuWeather** via a lightweight **Dart Shelf backend proxy** that protects the API key and normalizes responses. The app is localized for **Sri Lanka** with 25 districts, DMC-style disaster alert categories, and monsoon awareness.
+**Weather data** is sourced from **WeatherAPI.com** via a single `/forecast.json` request made directly from the Flutter client (no backend proxy). The app is localized for **Sri Lanka** with 25 districts, DMC-style disaster alert categories, and monsoon awareness.
 
 The app is designed to function as both an everyday weather companion and an emergency information hub, with an uncompromisingly clean aesthetic and a privacy-first data model.
 
@@ -66,7 +66,7 @@ The app is designed to function as both an everyday weather companion and an eme
 
 | # | Goal | KPI |
 |---|------|-----|
-| G1 | Deliver weather & derived alerts from AccuWeather data | Alert derivation latency < 5s |
+| G1 | Deliver weather & derived alerts from WeatherAPI.com data | Alert derivation latency < 5s |
 | G2 | Zero advertisements, zero tracking | No ad SDK in the app bundle |
 | G3 | Fully functional offline for cached data | Core screens load with stale data when offline |
 | G4 | Accessibility-first design | WCAG 2.1 AA compliance |
@@ -397,7 +397,7 @@ App Root (MaterialApp.router with GoRouter)
 ```
 
 **Behaviour:**
-- Weather data fetched from AccuWeather via backend proxy
+- Weather data fetched from WeatherAPI.com (called directly from the client)
 - Alerts derived from weather thresholds by [`WeatherAlertDeriver`](lib/core/utils/weather_alert_deriver.dart)
 - Map centers on Sri Lanka (7.87°N, 80.77°E) at zoom 7.2
 - District selection zooms map to district center at zoom 10.0
@@ -574,7 +574,7 @@ All selectors use modal bottom sheets with checkmark on selected item.
 
 ### F-01 Weather Alert Derivation
 
-Alerts are derived from live AccuWeather data by [`WeatherAlertDeriver`](lib/core/utils/weather_alert_deriver.dart).
+Alerts are derived from live WeatherAPI.com data by [`WeatherAlertDeriver`](lib/core/utils/weather_alert_deriver.dart).
 
 **Thresholds:**
 
@@ -612,13 +612,13 @@ Alerts are derived from live AccuWeather data by [`WeatherAlertDeriver`](lib/cor
 | Field | Spec |
 |-------|------|
 | Current | Temperature, apparent temperature, weather icon, wind speed/direction, humidity, precipitation, pressure, cloud cover, UV index |
-| Hourly | 12 hours from AccuWeather (temperature, precip probability, precip, wind, gusts, weather code, UV, visibility, humidity) |
-| Daily | 5 days from AccuWeather (weather code, temp max/min, precip sum, precip probability max, wind max, gusts max, sunrise, sunset, UV max) |
+| Hourly | 12 hours from WeatherAPI.com (temperature, precip probability, precip, wind, gusts, weather code, UV, visibility, humidity) |
+| Daily | 5 days from WeatherAPI.com (weather code, temp max/min, precip sum, precip probability max, wind max, gusts max, sunrise, sunset, UV max) |
 | Refresh | Cache TTL: 10 min (current), 1 hour (hourly), 3 hours (daily) |
 
 ### F-04 Weather Code Mapping
 
-Uses **AccuWeather icon codes** (1–47), not WMO codes. Defined in [`weather_codes.dart`](lib/core/constants/weather_codes.dart).
+Uses **WeatherAPI.com condition codes** (1000–1282), not WMO codes. Defined in [`weather_codes.dart`](lib/core/constants/weather_codes.dart).
 
 ### F-05 Timeline
 
@@ -632,49 +632,44 @@ Uses **AccuWeather icon codes** (1–47), not WMO codes. Defined in [`weather_co
 
 ---
 
-## 7. Backend Architecture
+## 7. Client Architecture
 
-The app uses a **Dart Shelf backend proxy** to protect the AccuWeather API key and avoid exposing it in the client.
+The app calls **WeatherAPI.com** directly from the Flutter client. The API key is loaded from a gitignored `.env` file via `flutter_dotenv` and exposed through `ApiConstants` getters. No backend server is involved in the weather pipeline.
 
-**File:** [`backend/lib/server.dart`](backend/lib/server.dart)
+**File:** [`lib/data/remote/weatherapi/weather_api_client.dart`](lib/data/remote/weatherapi/weather_api_client.dart)
 
 ### Architecture
 
 ```
-Flutter App ──→ Shelf Backend (localhost:8080) ──→ AccuWeather API
+Flutter App ──→ WeatherAPI.com (/forecast.json)
                      │
-                     └── .env file (ACCUWEATHER_API_KEY)
+                     └── .env file (WEATHERAPI_KEY, MAPTILER_API_KEY, OWM_API_KEY)
 ```
 
-### Endpoints
+### Endpoints (WeatherAPI.com)
 
 | Method | Path | Purpose |
 |--------|------|---------|
-| GET | `/health` | Health check |
-| GET | `/location/<query>` | City search |
-| GET | `/geoposition/<lat>/<lon>` | GPS → location key |
-| GET | `/current/<locationKey>` | Current conditions |
-| GET | `/hourly/<locationKey>` | 12-hour forecast |
-| GET | `/daily/<locationKey>` | 5-day forecast |
+| GET | `/v1/forecast.json` | Current + 12h hourly + 5-day daily in a single request |
 
-### Dependencies
+### Dependencies (client only)
 
 ```yaml
-# backend/pubspec.yaml
-shelf: ^1.4.1
-shelf_router: ^1.1.4
-shelf_cors_headers: ^0.1.5
-dio: ^5.4.0
-dotenv: ^4.2.0
+# pubspec.yaml
+flutter_dotenv: ^5.1.0   # loads .env at startup
+dio: ^5.7.0              # HTTP client used by WeatherApiClient
+dio_cache_interceptor: ^3.5.0  # in-memory HTTP cache
+hive_flutter: ^1.1.0     # on-disk cache for weather + settings
 ```
 
 ### How to Start
 
 ```bash
-cd backend
-dart pub get
-dart run lib/server.dart
+flutter pub get
+flutter run
 ```
+
+The app reads `WEATHERAPI_KEY`, `MAPTILER_API_KEY`, and `OWM_API_KEY` from a gitignored `.env` at the project root.
 
 See [`How to start.md`](How to start.md) for full instructions.
 
@@ -685,16 +680,11 @@ See [`How to start.md`](How to start.md) for full instructions.
 ### Data Flow
 
 ```
-AccuWeather API
-     │
+WeatherAPI.com (/forecast.json)
+     │  returns: current + hourly + daily in one payload
+     │  codes: WeatherAPI.com condition codes (1000–1282)
      ▼
-Shelf Backend (API key stored in .env)
-     │  ┌─ /geoposition → location key
-     │  ├─ /current      → current conditions (AccuWeather icon codes)
-     │  ├─ /hourly       → 12-hour forecast
-     │  └─ /daily        → 5-day forecast
-     ▼
-AccuWeatherClient (Dio HTTP client)
+WeatherApiClient (Dio HTTP client, direct from Flutter)
      │
      ▼
 WeatherRepositoryImpl
@@ -703,7 +693,7 @@ WeatherRepositoryImpl
      │  └─ Legacy cache deserialization fallback
      ▼
 WeatherBloc
-     │  ├─ WeatherInitial → LoadWeather/LoadWeatherForDistrict
+     │  ├─ WeatherInitial → LoadWeather / LoadWeather(useGps:true)
      │  ├─ WeatherLoading → show spinner
      │  ├─ WeatherLoaded  → current + hourly + daily + location
      │  └─ WeatherError   → show error with stale cache
@@ -748,7 +738,7 @@ lib/
 │   │   ├── app_sl_constants.dart  # Sri Lanka: 25 districts, 6 alert types, 12 cities, map bounds, monsoons
 │   │   ├── app_spacing.dart       # Spacing and border radius tokens
 │   │   ├── constants.dart         # Barrel export
-│   │   └── weather_codes.dart     # AccuWeather icon code → description/emoji mapping
+│   │   └── weather_codes.dart     # WeatherAPI.com condition code (1000–1282) → description/emoji mapping
 │   ├── di/
 │   │   ├── di.dart                # Barrel export
 │   │   └── injection.dart         # get_it service locator setup
@@ -769,8 +759,10 @@ lib/
 │   │   └── hive/
 │   │       └── hive_service.dart  # Hive box management (weather_cache, settings)
 │   ├── remote/
-│   │   └── accuweather/
-│   │       └── accuweather_client.dart  # Dio client for backend proxy + response models
+│   │   ├── weatherapi/
+│   │   │   └── weather_api_client.dart  # Dio client for WeatherAPI.com /forecast.json
+│   │   └── maptiler/
+│   │       └── maptiler_geocoding_client.dart  # Forward + reverse geocoding
 │   └── repositories/
 │       ├── weather_repository_impl.dart  # WeatherRepository implementation with caching
 │       └── settings_repository_impl.dart # SettingsRepository implementation with Hive
@@ -975,7 +967,7 @@ The [`NationalLocalToggle`](lib/presentation/widgets/national_local_toggle.dart)
 
 ### Completed (v1.0)
 - [x] Design system (dark/light themes, typography, spacing)
-- [x] AccuWeather backend proxy (Shelf/Dart server)
+- [x] Weather data pipeline (WeatherAPI.com /forecast.json, no backend)
 - [x] Weather data pipeline (current + hourly + daily)
 - [x] Home screen (map + conditions + derived alerts)
 - [x] Weather screen (draggable sheet + detailed weather)
@@ -1013,11 +1005,11 @@ See [`plans/dmc_alert_integration_plan.md`](plans/dmc_alert_integration_plan.md)
 
 | Req ID | Requirement | Implementation |
 |--------|-------------|----------------|
-| PRIV-01 | API key not exposed to client | Stored in backend `.env`; all AccuWeather calls proxied through Shelf server |
+| PRIV-01 | API key not exposed to client | Stored in gitignored `.env`; loaded via `flutter_dotenv` and exposed through `ApiConstants` |
 | PRIV-02 | No analytics SDK | No Firebase Analytics, Mixpanel, or similar |
 | PRIV-03 | No advertising SDK | No AdMob, no Meta Audience Network |
 | PRIV-04 | No user account required | App functions fully without registration |
-| PRIV-05 | GPS coordinates sent only to backend | Location → backend → AccuWeather (AccuWeather receives coordinates) |
+| PRIV-05 | GPS coordinates sent only to third-party APIs | Location → WeatherAPI.com + MapTiler; user controls GPS via Local mode |
 | PRIV-06 | Location history not stored remotely | Cached on-device in Hive only |
 | PRIV-07 | Uninstall clears all data | No remote data deletion needed (no user account) |
 
@@ -1073,8 +1065,8 @@ See [`plans/dmc_alert_integration_plan.md`](plans/dmc_alert_integration_plan.md)
 
 | # | Question / Risk | Mitigation |
 |---|-----------------|-----------|
-| R1 | **AccuWeather API cost at scale** — 50 calls/day free tier limit | Backend with per-location caching; upgrade to paid tier if needed |
-| R2 | **Backend single point of failure** — if Shelf server is down, no weather data | Hive cache provides offline fallback; consider serverless proxy |
+| R1 | **WeatherAPI.com call volume** — generous free tier (1M calls/month) | Dio + Hive cache minimise repeat calls per location |
+| R2 | **No backend for offline scenarios** — if internet drops, only cache is available | Hive cache provides offline fallback for all screens |
 | R3 | **No real alert data source for Sri Lanka** — DMC has no public API | Multi-source aggregation planned (see DMC integration plan); derive from weather thresholds in the meantime |
 | R4 | **RainViewer API reliability** — free tier, no SLA | Graceful degradation: show map without radar overlay |
 | R5 | **Font loading** — google_fonts requires network on first launch | Bundle Inter font as asset for offline-first reliability |
@@ -1094,14 +1086,14 @@ See [`plans/dmc_alert_integration_plan.md`](plans/dmc_alert_integration_plan.md)
 | [`lib/core/theme/app_theme.dart`](lib/core/theme/app_theme.dart) | Dark/light ThemeData with accessibility overrides |
 | [`lib/core/router/app_router.dart`](lib/core/router/app_router.dart) | GoRouter with ShellRoute (5 tabs) + weather-detail push route |
 | [`lib/core/di/injection.dart`](lib/core/di/injection.dart) | get_it service locator registration |
-| [`lib/data/remote/accuweather/accuweather_client.dart`](lib/data/remote/accuweather/accuweather_client.dart) | Dio client for backend AccuWeather proxy |
+| [`lib/data/remote/weatherapi/weather_api_client.dart`](lib/data/remote/weatherapi/weather_api_client.dart) | Dio client for WeatherAPI.com /forecast.json |
+| [`lib/data/remote/maptiler/maptiler_geocoding_client.dart`](lib/data/remote/maptiler/maptiler_geocoding_client.dart) | Dio client for MapTiler geocoding |
 | [`lib/data/local/hive/hive_service.dart`](lib/data/local/hive/hive_service.dart) | Hive box management |
 | [`lib/data/repositories/weather_repository_impl.dart`](lib/data/repositories/weather_repository_impl.dart) | Weather repo with caching, GPS, serialization |
 | [`lib/presentation/blocs/weather/weather_bloc.dart`](lib/presentation/blocs/weather/weather_bloc.dart) | WeatherBloc with district-aware loading |
 | [`lib/presentation/blocs/settings/settings_bloc.dart`](lib/presentation/blocs/settings/settings_bloc.dart) | SettingsBloc for user preferences |
 | [`lib/presentation/widgets/national_local_toggle.dart`](lib/presentation/widgets/national_local_toggle.dart) | Island-wide / District toggle |
 | [`lib/presentation/widgets/main_scaffold.dart`](lib/presentation/widgets/main_scaffold.dart) | ShellRoute scaffold with 5-tab bottom nav |
-| [`backend/lib/server.dart`](backend/lib/server.dart) | Shelf server proxying AccuWeather API |
 | [`plans/dmc_alert_integration_plan.md`](plans/dmc_alert_integration_plan.md) | Architectural plan for real alert pipeline |
 | [`plans/sri_lanka_localization_plan.md`](plans/sri_lanka_localization_plan.md) | Completed SL localization plan |
 
@@ -1130,4 +1122,4 @@ ThemeData(
 ---
 
 *This PRD reflects the codebase as of May 27, 2026. All specifications are subject to revision as development progresses.*
-*Weather data: AccuWeather via backend proxy. Map tiles: CartoDB. Radar: RainViewer.*
+*Weather data: WeatherAPI.com (direct from client). Map tiles: MapTiler hybrid. Radar overlay: OpenWeatherMap precipitation tiles.*

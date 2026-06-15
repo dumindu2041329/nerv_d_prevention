@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_sl_constants.dart';
 import '../../../core/di/injection.dart';
 import '../../../core/utils/weather_alert_deriver.dart';
@@ -102,6 +103,8 @@ class _TimelineScreenState extends State<TimelineScreen> {
           final events = WeatherAlertDeriver.deriveTimelineEvents(
             state.weatherData,
             districtName: state.location?.name,
+            realLatitude: state.location?.latitude,
+            realLongitude: state.location?.longitude,
           );
           return _buildTimelineList(context, events);
         }
@@ -298,7 +301,9 @@ class _TimelineScreenState extends State<TimelineScreen> {
               child: Padding(
                 padding: const EdgeInsets.only(top: 12, bottom: 16),
                 child: InkWell(
-                  onTap: () {},
+                  onTap: () {
+                    context.push('/timeline-event-detail', extra: event);
+                  },
                   child: Row(
                     children: [
                       Expanded(

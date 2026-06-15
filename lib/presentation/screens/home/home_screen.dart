@@ -540,6 +540,8 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
         return Icons.beach_access;
       case SLAlertType.tsunami:
         return Icons.waves;
+      case SLAlertType.earthquake:
+        return Icons.public;
     }
   }
 

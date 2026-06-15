@@ -8,7 +8,6 @@ import '../../../core/constants/weather_codes.dart';
 import '../../../core/utils/date_time_utils.dart';
 import '../../../domain/entities/location.dart';
 import '../../blocs/weather/weather_bloc.dart';
-import '../../widgets/national_local_toggle.dart';
 
 class WeatherScreen extends StatefulWidget {
   const WeatherScreen({super.key});
@@ -18,28 +17,8 @@ class WeatherScreen extends StatefulWidget {
 }
 
 class _WeatherScreenState extends State<WeatherScreen> {
-  bool _isIslandWide = true;
   final DraggableScrollableController _sheetController =
       DraggableScrollableController();
-
-  void _onToggleChanged(bool isNational) {
-    setState(() => _isIslandWide = isNational);
-    if (isNational) {
-      context.read<WeatherBloc>().add(
-        LoadWeather(
-          location: const Location(
-            id: 'island_wide',
-            name: 'Sri Lanka',
-            country: 'Sri Lanka',
-            latitude: 7.8731,
-            longitude: 80.7718,
-          ),
-        ),
-      );
-    } else {
-      context.read<WeatherBloc>().add(const LoadWeather(useGps: true));
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -82,16 +61,6 @@ class _WeatherScreenState extends State<WeatherScreen> {
                     tileDisplay: const TileDisplay.instantaneous(opacity: 0.6),
                   ),
                 ],
-              ),
-            ),
-            // Toggle at top
-            Positioned(
-              top: MediaQuery.of(context).padding.top,
-              left: 0,
-              right: 0,
-              child: NationalLocalToggle(
-                isNational: _isIslandWide,
-                onChanged: _onToggleChanged,
               ),
             ),
             // Draggable bottom sheet with real data

@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:go_router/go_router.dart';
 import 'package:latlong2/latlong.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/di/injection.dart';
@@ -60,6 +61,15 @@ class _MapScreenState extends State<MapScreen> {
         return SelectLayerSheet(
           initialLayer: _selectedLayer,
           onLayerChanged: (layer) {
+            if (layer == MapLayer.hazardMap) {
+              // The layer sheet pops itself; defer the push so we don't
+              // pop the underlying route while the sheet is dismissing.
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (!mounted) return;
+                GoRouter.of(context).push('/map/hazard');
+              });
+              return;
+            }
             if (_selectedLayer == layer) return;
             setState(() => _selectedLayer = layer);
             // Re-fetch weather so the chip and time scrubber reflect the

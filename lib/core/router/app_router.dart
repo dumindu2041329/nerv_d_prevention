@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../domain/entities/timeline_event.dart';
 import '../../presentation/screens/home/home_screen.dart';
 import '../../presentation/screens/map/map_screen.dart';
+import '../../presentation/screens/map/hazard_map_screen.dart';
 import '../../presentation/screens/timeline/timeline_screen.dart';
+import '../../presentation/screens/timeline/timeline_event_detail_screen.dart';
 import '../../presentation/screens/weather/weather_screen.dart';
 import '../../presentation/screens/menu/menu_screen.dart';
 import '../../presentation/screens/weather_detail/weather_detail_screen.dart';
@@ -58,6 +61,19 @@ class AppRouter {
         path: '/weather-detail',
         parentNavigatorKey: _rootNavigatorKey,
         builder: (context, state) => const WeatherDetailScreen(),
+      ),
+      GoRoute(
+        path: '/timeline-event-detail',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) {
+          final event = state.extra as TimelineEvent;
+          return TimelineEventDetailScreen(event: event);
+        },
+      ),
+      GoRoute(
+        path: '/map/hazard',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => const HazardMapScreen(),
       ),
     ],
   );

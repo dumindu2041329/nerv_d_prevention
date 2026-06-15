@@ -94,7 +94,7 @@ The `NationalLocalToggle` widget is shared across Home, Timeline, and Weather sc
 
 ### 5. Data Handling & API
 - **Weather data pipeline:** `WeatherAPI.com → WeatherApiClient (Dio) → WeatherRepositoryImpl → WeatherBloc → UI`
-- **Weather codes are WeatherAPI.com condition codes** (1000–1282), NOT AccuWeather codes (1–47) and NOT WMO codes. Use [`WeatherCodeMapping`](lib/core/constants/weather_codes.dart) for code→description/emoji mapping.
+- **Weather codes are WeatherAPI.com condition codes** (1000–1282), NOT WMO codes. Use [`WeatherCodeMapping`](lib/core/constants/weather_codes.dart) for code→description/emoji mapping.
 - **Cache:** `HiveService` with two Hive boxes: `weather_cache` (weather data) and `settings` (user preferences). Cache TTLs defined in `ApiConstants`: 10 min (current), 1 hour (hourly), 3 hours (daily).
 - **Legacy cache support:** [`WeatherRepositoryImpl._tryLegacyCacheDeserialize()`](lib/data/repositories/weather_repository_impl.dart) handles older cache keys. Do not remove this.
 - **Precipitation overlay** uses OpenWeatherMap tile API (`tile.openweathermap.org/map/precipitation_new/{z}/{x}/{y}.png`). Rendered as a `TileLayer` with 0.6 opacity on all map screens.
@@ -126,10 +126,8 @@ The `NationalLocalToggle` widget is shared across Home, Timeline, and Weather sc
 - The "Weather data: Open-Meteo" footer text in [`settings_screen.dart`](lib/presentation/screens/settings/settings_screen.dart) is **stale/incorrect** — actual data comes from WeatherAPI.com.
 - `connectivity_plus` is in pubspec but connectivity checks are not implemented — the app relies on cache fallback on network error.
 - The `geocoding` package has been **removed** — reverse geocoding is handled by `MaptilerGeocodingClient`.
-- The `accuweather_client.dart` file has been **deleted** — replaced by `weather_api_client.dart`.
 
 ### 9. What NOT to Do
-- Do NOT use AccuWeather API or AccuWeather icon codes (1–47). The app uses WeatherAPI.com condition codes (1000–1282).
 - Do NOT use Open-Meteo API or WMO weather codes.
 - Do NOT hardcode API keys — all keys must come from `.env` via `ApiConstants` dotenv getters.
 - Do NOT add a `usecases` layer — the architecture intentionally omits it.

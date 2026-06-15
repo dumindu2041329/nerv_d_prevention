@@ -75,6 +75,17 @@ enum SLDistrict {
   static List<SLDistrict> get alphabetical =>
       values.toList()..sort((a, b) => a.displayName.compareTo(b.displayName));
 
+  /// Case-insensitive lookup by [displayName]. Returns `null` when
+  /// [name] doesn't match any district (e.g. "Current Location").
+  static SLDistrict? fromDisplayName(String? name) {
+    if (name == null) return null;
+    final lower = name.toLowerCase();
+    for (final d in values) {
+      if (d.displayName.toLowerCase() == lower) return d;
+    }
+    return null;
+  }
+
   /// Districts grouped by province
   static Map<String, List<SLDistrict>> get byProvince {
     final map = <String, List<SLDistrict>>{};
@@ -102,7 +113,8 @@ enum SLAlertType {
     '#00E5FF',
     'beach_access',
   ),
-  tsunami('Tsunami', 'Tsunami Bulletin', '#FF1744', 'waves');
+  tsunami('Tsunami', 'Tsunami Bulletin', '#FF1744', 'waves'),
+  earthquake('Earthquake', 'Earthquake Info', '#FF1744', 'public');
 
   const SLAlertType(
     this.label,

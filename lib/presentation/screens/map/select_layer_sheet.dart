@@ -196,11 +196,6 @@ class _SelectLayerSheetState extends State<SelectLayerSheet> {
       icon: Icons.cloud_outlined,
     ),
     _LayerDescriptor(
-      id: MapLayer.snow,
-      label: 'Snow',
-      icon: Icons.ac_unit,
-    ),
-    _LayerDescriptor(
       id: MapLayer.weatherForecast,
       label: 'Weather Forecast',
       icon: Icons.wb_cloudy_outlined,
