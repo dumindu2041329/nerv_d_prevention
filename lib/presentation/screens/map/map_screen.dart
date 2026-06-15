@@ -1,3 +1,5 @@
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -9,6 +11,7 @@ import '../../../core/constants/weather_codes.dart';
 import '../../../core/utils/date_time_utils.dart';
 import '../../../domain/entities/weather_data.dart';
 import '../../blocs/weather/weather_bloc.dart';
+import 'select_layer_sheet.dart';
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
@@ -27,6 +30,7 @@ class _MapScreenState extends State<MapScreen> {
   LatLng? _gpsLocation;
   int _selectedSlotIndex = 0;
   double _dragAccumulator = 0;
+  MapLayer _selectedLayer = MapLayer.rainRadar;
 
   @override
   void initState() {
@@ -43,6 +47,30 @@ class _MapScreenState extends State<MapScreen> {
   void _zoomToMyLocation() {
     final target = _gpsLocation ?? SLMapConstants.center;
     _mapController.move(target, 12.0);
+  }
+
+  void _openLayerSheet() {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withValues(alpha: 0.55),
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (sheetContext) {
+        return SelectLayerSheet(
+          initialLayer: _selectedLayer,
+          onLayerChanged: (layer) {
+            if (_selectedLayer == layer) return;
+            setState(() => _selectedLayer = layer);
+            // Re-fetch weather so the chip and time scrubber reflect the
+            // freshly-loaded data for the new layer.
+            _weatherBloc.add(
+              const LoadWeather(useGps: true, forceRefresh: true),
+            );
+          },
+        );
+      },
+    );
   }
 
   /// Expands the hourly forecast into 5-minute slots via linear interpolation
@@ -205,12 +233,15 @@ class _MapScreenState extends State<MapScreen> {
                       urlTemplate: ApiConstants.mapTileHybrid,
                       userAgentPackageName: 'com.example.nerv_d_prevention',
                     ),
-                    // Precipitation overlay
-                    TileLayer(
-                      urlTemplate: ApiConstants.owmPrecipitationOverlay,
-                      userAgentPackageName: 'com.example.nerv_d_prevention',
-                      tileDisplay: const TileDisplay.instantaneous(opacity: 0.6),
-                    ),
+                    // Layer-specific overlay (reactive to selected layer)
+                    if (_selectedLayer.overlayUrl != null)
+                      TileLayer(
+                        urlTemplate: _selectedLayer.overlayUrl!,
+                        userAgentPackageName: 'com.example.nerv_d_prevention',
+                        tileDisplay: const TileDisplay.instantaneous(opacity: 0.6),
+                      ),
+                    // Layer-specific markers/visualizations
+                    _buildLayerMarkers(),
                     RichAttributionWidget(
                       animationConfig: const ScaleRAWA(),
                       attributions: [
@@ -313,6 +344,152 @@ class _MapScreenState extends State<MapScreen> {
         ),
       ],
     );
+  }
+
+  // ── Layer Markers (per MapLayer) ────────────────────────────────────
+
+  /// Returns a MarkerLayer that visualises the active layer's data on the
+  /// map. Reads the most recent weather snapshot from WeatherBloc.
+  Widget _buildLayerMarkers() {
+    return BlocBuilder<WeatherBloc, WeatherState>(
+      builder: (context, state) {
+        if (state is! WeatherLoaded) return const SizedBox.shrink();
+        if (_gpsLocation == null) return const SizedBox.shrink();
+
+        final current = state.weatherData.current;
+        final hourly = state.weatherData.hourly;
+        final marker = _markerForLayer(
+          layer: _selectedLayer,
+          current: current,
+          hourly: hourly,
+          locationName: state.location?.name ?? 'Current Location',
+        );
+        if (marker == null) return const SizedBox.shrink();
+
+        return MarkerLayer(
+          markers: [
+            Marker(
+              width: 140,
+              height: 70,
+              point: _gpsLocation!,
+              alignment: Alignment.bottomCenter,
+              child: marker,
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget? _markerForLayer({
+    required MapLayer layer,
+    required CurrentWeather current,
+    required List<HourlyWeather> hourly,
+    required String locationName,
+  }) {
+    final emoji = WeatherCodeMapping.getIcon(
+      current.weatherCode,
+      isDay: _isDay(current.time),
+    );
+    final tempC = current.temperature.toStringAsFixed(0);
+    final windKph = current.windSpeed.toStringAsFixed(0);
+    final humidityPct = current.humidity.toStringAsFixed(0);
+
+    switch (layer) {
+      case MapLayer.realTimeWeather:
+        return _WeatherPin(
+          color: const Color(0xFF00BCD4),
+          emoji: emoji,
+          primary: '$tempC°C',
+          secondary: '$locationName · $windKph km/h',
+        );
+      case MapLayer.snow:
+        final snowyHours = hourly
+            .where((h) =>
+                h.precipitation > 0 &&
+                h.temperature <= 2.0 &&
+                (h.weatherCode == 1210 ||
+                    h.weatherCode == 1213 ||
+                    h.weatherCode == 1216 ||
+                    h.weatherCode == 1219 ||
+                    h.weatherCode == 1222 ||
+                    h.weatherCode == 1225 ||
+                    h.weatherCode == 1255 ||
+                    h.weatherCode == 1258))
+            .length;
+        return _WeatherPin(
+          color: const Color(0xFF80D8FF),
+          emoji: '❄️',
+          primary: snowyHours > 0 ? '$snowyHours h snow' : 'No snow',
+          secondary: 'Feels ${current.apparentTemperature.toStringAsFixed(0)}°C',
+        );
+      case MapLayer.weatherForecast:
+        final next = hourly.isNotEmpty ? hourly.first : null;
+        final nextEmoji = next == null
+            ? emoji
+            : WeatherCodeMapping.getIcon(next.weatherCode, isDay: _isDay(next.time));
+        return _WeatherPin(
+          color: const Color(0xFFFFC400),
+          emoji: nextEmoji,
+          primary: next == null
+              ? '$tempC°C'
+              : '${next.temperature.toStringAsFixed(0)}°C',
+          secondary: next == null
+              ? 'No forecast'
+              : 'Next hr · ${(next.precipitationProbability).toStringAsFixed(0)}%',
+        );
+      case MapLayer.typhoon:
+        return _WeatherPin(
+          color: const Color(0xFFFF6D00),
+          emoji: '🌀',
+          primary: '$windKph km/h',
+          secondary: 'Wind · $humidityPct% RH',
+        );
+      case MapLayer.lightning:
+        final thunderRisk = hourly
+            .where((h) =>
+                h.precipitationProbability >= 60 &&
+                h.weatherCode >= 1273 &&
+                h.weatherCode <= 1282)
+            .length;
+        return _WeatherPin(
+          color: const Color(0xFFFFC400),
+          emoji: '⚡',
+          primary: thunderRisk > 0 ? '$thunderRisk h risk' : 'Calm',
+          secondary: 'Pressure ${current.surfacePressure.toStringAsFixed(0)} hPa',
+        );
+      case MapLayer.hazardMap:
+        return _WeatherPin(
+          color: const Color(0xFFFF1744),
+          emoji: '⚠️',
+          primary: 'Hazard scan',
+          secondary: 'Wind $windKph · $humidityPct% RH',
+        );
+      case MapLayer.crisisMapping:
+        return _WeatherPin(
+          color: const Color(0xFF69F0AE),
+          emoji: '🆘',
+          primary: 'Crisis monitor',
+          secondary: 'Local · $tempC°C',
+        );
+      case MapLayer.strongMotionMonitor:
+        return _WeatherPin(
+          color: const Color(0xFFFF1744),
+          emoji: '📈',
+          primary: 'Seismic',
+          secondary: 'Local baseline',
+        );
+      case MapLayer.river:
+        final rainMm = current.precipitation.toStringAsFixed(1);
+        return _WeatherPin(
+          color: const Color(0xFF42A5F5),
+          emoji: '🌊',
+          primary: '$rainMm mm',
+          secondary: 'Rainfall · $humidityPct% RH',
+        );
+      case MapLayer.rainRadar:
+        return null;
+    }
   }
 
   // ── Weather Chip ────────────────────────────────────────────────────
@@ -418,16 +595,18 @@ class _MapScreenState extends State<MapScreen> {
       ),
       child: Column(
         children: [
-          const Text(
-            'Weather Map — Sri Lanka',
-            style: TextStyle(
+          Text(
+            _selectedLayer.mapTitle,
+            style: const TextStyle(
               color: Colors.white,
               fontSize: 18,
               fontWeight: FontWeight.w700,
             ),
           ),
-          const SizedBox(height: 10),
-          _buildColorLegend(),
+          if (_selectedLayer == MapLayer.rainRadar) ...[
+            const SizedBox(height: 10),
+            _buildColorLegend(),
+          ],
         ],
       ),
     );
@@ -498,6 +677,7 @@ class _MapScreenState extends State<MapScreen> {
         final selectedIndex = _clampIndex(_selectedSlotIndex, slots.length);
         final selectedTime =
             slots.isNotEmpty ? slots[selectedIndex].time : DateTime.now();
+        final localSelectedTime = selectedTime.toLocal();
         final isNow =
             selectedTime.difference(DateTime.now()).abs().inMinutes <= 30;
 
@@ -524,7 +704,7 @@ class _MapScreenState extends State<MapScreen> {
                 children: [
                   const SizedBox(width: 60),
                   Text(
-                    isNow ? 'Now · UTC' : '${DateTimeUtils.formatDateUtc(selectedTime)} · UTC',
+                    isNow ? 'Now · Local' : '${DateTimeUtils.formatDate(localSelectedTime)} · Local',
                     style: const TextStyle(
                       color: Color(0xFF00BCD4),
                       fontSize: 14,
@@ -533,7 +713,7 @@ class _MapScreenState extends State<MapScreen> {
                   ),
                   const SizedBox(width: 16),
                   Text(
-                    DateTimeUtils.formatTimeUtc(selectedTime),
+                    DateTimeUtils.formatTime(localSelectedTime),
                     style: const TextStyle(
                       color: Color(0xFF00BCD4),
                       fontSize: 36,
@@ -542,7 +722,18 @@ class _MapScreenState extends State<MapScreen> {
                     ),
                   ),
                   const Spacer(),
-                  const Icon(Icons.layers, color: Color(0xFF00BCD4), size: 28),
+                  InkResponse(
+                    onTap: _openLayerSheet,
+                    radius: 24,
+                    child: const Padding(
+                      padding: EdgeInsets.all(4),
+                      child: Icon(
+                        Icons.layers,
+                        color: Color(0xFF00BCD4),
+                        size: 28,
+                      ),
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 10),
@@ -675,7 +866,7 @@ class _MapScreenState extends State<MapScreen> {
                       children: [
                         if ((i - startIndex) % 6 == 0)
                           Text(
-                            DateTimeUtils.formatTimeUtc(slots[i].time),
+                            DateTimeUtils.formatTime(slots[i].time.toLocal()),
                             style: TextStyle(
                               color: Colors.white.withValues(alpha: 0.4),
                               fontSize: 10,
@@ -767,4 +958,91 @@ class _ScrubberThumbShape extends SliderComponentShape {
     final rrect = RRect.fromRectAndRadius(rect, const Radius.circular(1.5));
     context.canvas.drawRRect(rrect, paint);
   }
+}
+
+class _WeatherPin extends StatelessWidget {
+  final Color color;
+  final String emoji;
+  final String primary;
+  final String secondary;
+
+  const _WeatherPin({
+    required this.color,
+    required this.emoji,
+    required this.primary,
+    required this.secondary,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: const Color(0xFF0B0B0B).withValues(alpha: 0.92),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: color.withValues(alpha: 0.5),
+              width: 1,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(emoji, style: const TextStyle(fontSize: 18)),
+              const SizedBox(width: 6),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    primary,
+                    style: TextStyle(
+                      color: color,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  Text(
+                    secondary,
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.7),
+                      fontSize: 9,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        // Tail triangle pointing down to the location
+        CustomPaint(
+          size: const Size(8, 6),
+          painter: _PinTailPainter(color),
+        ),
+      ],
+    );
+  }
+}
+
+class _PinTailPainter extends CustomPainter {
+  final Color color;
+  _PinTailPainter(this.color);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()..color = color.withValues(alpha: 0.5);
+    final path = ui.Path()
+      ..moveTo(0, 0)
+      ..lineTo(size.width, 0)
+      ..lineTo(size.width / 2, size.height)
+      ..close();
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _PinTailPainter oldDelegate) =>
+      oldDelegate.color != color;
 }

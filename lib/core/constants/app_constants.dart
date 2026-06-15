@@ -18,6 +18,22 @@ class ApiConstants {
 
   static String get owmPrecipitationOverlay =>
       'https://tile.openweathermap.org/map/precipitation_new/{z}/{x}/{y}.png?appid=$owmApiKey';
+
+  // OWM tile layer variants used for the Select Layer map overlays.
+  static String get owmCloudsOverlay =>
+      'https://tile.openweathermap.org/map/clouds_new/{z}/{x}/{y}.png?appid=$owmApiKey';
+
+  static String get owmTempOverlay =>
+      'https://tile.openweathermap.org/map/temp_new/{z}/{x}/{y}.png?appid=$owmApiKey';
+
+  static String get owmWindOverlay =>
+      'https://tile.openweathermap.org/map/wind_new/{z}/{x}/{y}.png?appid=$owmApiKey';
+
+  static String get owmSnowOverlay =>
+      'https://tile.openweathermap.org/map/snow_new/{z}/{x}/{y}.png?appid=$owmApiKey';
+
+  static String get owmPressureOverlay =>
+      'https://tile.openweathermap.org/map/pressure_new/{z}/{x}/{y}.png?appid=$owmApiKey';
 }
 
 class AppConstants {
