@@ -10,10 +10,11 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
   final SettingsRepository _settingsRepository;
 
   SettingsBloc({required SettingsRepository settingsRepository})
-      : _settingsRepository = settingsRepository,
-        super(const SettingsState()) {
+    : _settingsRepository = settingsRepository,
+      super(const SettingsState()) {
     on<LoadSettings>(_onLoadSettings);
     on<ToggleDarkMode>(_onToggleDarkMode);
+    on<SetLanguage>(_onSetLanguage);
     on<SetColourVisionMode>(_onSetColourVisionMode);
     on<SetContrastMode>(_onSetContrastMode);
     on<SetTextSizeScale>(_onSetTextSizeScale);
@@ -25,19 +26,23 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     Emitter<SettingsState> emit,
   ) async {
     final isDarkMode = await _settingsRepository.isDarkMode();
+    final language = await _settingsRepository.getLanguage();
     final colourVisionMode = await _settingsRepository.getColourVisionMode();
     final contrastMode = await _settingsRepository.getContrastMode();
     final textSizeScale = await _settingsRepository.getTextSizeScale();
     final fontWeightScale = await _settingsRepository.getFontWeightScale();
 
-    emit(SettingsState(
-      isDarkMode: isDarkMode,
-      colourVisionMode: colourVisionMode,
-      contrastMode: contrastMode,
-      textSizeScale: textSizeScale,
-      fontWeightScale: fontWeightScale,
-      isLoaded: true,
-    ));
+    emit(
+      SettingsState(
+        isDarkMode: isDarkMode,
+        language: language,
+        colourVisionMode: colourVisionMode,
+        contrastMode: contrastMode,
+        textSizeScale: textSizeScale,
+        fontWeightScale: fontWeightScale,
+        isLoaded: true,
+      ),
+    );
   }
 
   Future<void> _onToggleDarkMode(
@@ -47,6 +52,14 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     final newValue = !state.isDarkMode;
     await _settingsRepository.setDarkMode(newValue);
     emit(state.copyWith(isDarkMode: newValue));
+  }
+
+  Future<void> _onSetLanguage(
+    SetLanguage event,
+    Emitter<SettingsState> emit,
+  ) async {
+    await _settingsRepository.setLanguage(event.language);
+    emit(state.copyWith(language: event.language));
   }
 
   Future<void> _onSetColourVisionMode(

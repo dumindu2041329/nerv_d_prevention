@@ -6,7 +6,7 @@ class SettingsRepositoryImpl implements SettingsRepository {
   final HiveService _hiveService;
 
   SettingsRepositoryImpl({required HiveService hiveService})
-      : _hiveService = hiveService;
+    : _hiveService = hiveService;
 
   @override
   Future<bool> isDarkMode() async {
@@ -16,6 +16,17 @@ class SettingsRepositoryImpl implements SettingsRepository {
   @override
   Future<void> setDarkMode(bool value) async {
     await _hiveService.setSetting('dark_mode', value);
+  }
+
+  @override
+  Future<AppLanguage> getLanguage() async {
+    final hiveValue = await _hiveService.getSetting<int>('language');
+    return AppLanguage.fromHiveValue(hiveValue);
+  }
+
+  @override
+  Future<void> setLanguage(AppLanguage language) async {
+    await _hiveService.setSetting('language', language.hiveValue);
   }
 
   @override
@@ -64,7 +75,9 @@ class SettingsRepositoryImpl implements SettingsRepository {
 
   @override
   Future<List<String>> getSavedLocationIds() async {
-    final list = await _hiveService.getSetting<List<dynamic>>('saved_location_ids');
+    final list = await _hiveService.getSetting<List<dynamic>>(
+      'saved_location_ids',
+    );
     return list?.cast<String>() ?? [];
   }
 

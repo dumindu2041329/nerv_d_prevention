@@ -1,17 +1,89 @@
+import 'dart:convert';
+
 import 'package:hive_flutter/hive_flutter.dart';
+import '../../../core/constants/app_colors.dart';
+import '../../../domain/entities/alert.dart';
 import '../../../domain/entities/location.dart';
 
 class HiveService {
   static const String weatherCacheBox = 'weather_cache';
   static const String settingsBox = 'settings';
+  static const String alertsCacheBox = 'alerts_cache';
 
   late Box<dynamic> _weatherCacheBox;
   late Box<dynamic> _settingsBox;
+  late Box<dynamic> _alertsCacheBox;
 
   Future<void> init() async {
     _weatherCacheBox = await Hive.openBox(weatherCacheBox);
     _settingsBox = await Hive.openBox(settingsBox);
+    _alertsCacheBox = await Hive.openBox(alertsCacheBox);
   }
+
+  // ── SOS / Disaster alert cache ─────────────────────────────────────
+
+  /// Persists the full list of [Alert]s plus a freshness timestamp.
+  /// Stored as a JSON string so older cache versions remain readable.
+  Future<void> cacheSosAlerts(List<Alert> alerts) async {
+    final encoded = jsonEncode(alerts.map(_alertToMap).toList());
+    await _alertsCacheBox.put('sos_alerts', encoded);
+    await _alertsCacheBox.put(
+      'sos_alerts_timestamp',
+      DateTime.now().toIso8601String(),
+    );
+  }
+
+  /// Returns the cached SOS alerts or `null` if none exist.
+  List<Alert>? getCachedSosAlerts() {
+    final raw = _alertsCacheBox.get('sos_alerts');
+    if (raw is! String) return null;
+    try {
+      final list = jsonDecode(raw) as List;
+      return list
+          .cast<Map<String, dynamic>>()
+          .map(_alertFromMap)
+          .toList(growable: false);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  DateTime? getSosAlertsCacheTimestamp() {
+    final raw = _alertsCacheBox.get('sos_alerts_timestamp');
+    if (raw is! String) return null;
+    return DateTime.tryParse(raw);
+  }
+
+  Map<String, dynamic> _alertToMap(Alert a) => {
+        'id': a.id,
+        'type': a.type,
+        'headline': a.headline,
+        'description': a.description,
+        'severity': a.severity.name,
+        'issuedTime': a.issuedTime.toIso8601String(),
+        'expiryTime': a.expiryTime?.toIso8601String(),
+        'location': a.location,
+        'metadata': a.metadata,
+      };
+
+  Alert _alertFromMap(Map<String, dynamic> m) => Alert(
+        id: m['id'] as String,
+        type: m['type'] as String,
+        headline: m['headline'] as String,
+        description: m['description'] as String,
+        severity: SeverityLevel.values.firstWhere(
+          (s) => s.name == m['severity'],
+          orElse: () => SeverityLevel.info,
+        ),
+        issuedTime: DateTime.parse(m['issuedTime'] as String),
+        expiryTime: m['expiryTime'] is String
+            ? DateTime.tryParse(m['expiryTime'] as String)
+            : null,
+        location: m['location'] as String? ?? '',
+        metadata: m['metadata'] is Map
+            ? Map<String, dynamic>.from(m['metadata'] as Map)
+            : null,
+      );
 
   /// Caches complete weather data including current, hourly, and daily
   /// forecasts, plus a timestamp for staleness checks.

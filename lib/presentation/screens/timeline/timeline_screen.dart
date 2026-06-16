@@ -7,8 +7,11 @@ import '../../../core/utils/weather_alert_deriver.dart';
 import '../../../domain/entities/location.dart';
 import '../../../domain/entities/timeline_event.dart';
 import '../../../core/utils/date_time_utils.dart';
+import '../../../core/localization/app_localizations.dart';
+import '../../blocs/alerts/alert_bloc.dart';
 import '../../blocs/weather/weather_bloc.dart';
 import '../../widgets/national_local_toggle.dart';
+import '../../widgets/sos_alert_banner.dart';
 
 class TimelineScreen extends StatefulWidget {
   const TimelineScreen({super.key});
@@ -79,51 +82,77 @@ class _TimelineScreenState extends State<TimelineScreen> {
   }
 
   Widget _buildTimelineContent(BuildContext context) {
-    return BlocBuilder<WeatherBloc, WeatherState>(
-      builder: (context, state) {
-        if (state is WeatherLoading) {
-          return const Center(
-            child: CircularProgressIndicator(color: Color(0xFF00BCD4)),
-          );
-        }
+    return Column(
+      children: [
+        // SOS alert header — pinned above the timeline list.
+        BlocBuilder<AlertBloc, AlertState>(
+          builder: (context, alertState) {
+            if (alertState is AlertLoaded && alertState.alerts.isNotEmpty) {
+              return Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    ...alertState.alerts.map((a) => SosAlertBanner(alert: a)),
+                  ],
+                ),
+              );
+            }
+            return const SizedBox.shrink();
+          },
+        ),
+        Expanded(
+          child: BlocBuilder<WeatherBloc, WeatherState>(
+            builder: (context, state) {
+              final l10n = AppLocalizations.of(context);
 
-        if (state is WeatherError) {
-          return Center(
-            child: Text(
-              state.message,
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.5),
-                fontSize: 16,
-              ),
-            ),
-          );
-        }
+              if (state is WeatherLoading) {
+                return const Center(
+                  child: CircularProgressIndicator(color: Color(0xFF00BCD4)),
+                );
+              }
 
-        if (state is WeatherLoaded) {
-          final events = WeatherAlertDeriver.deriveTimelineEvents(
-            state.weatherData,
-            districtName: state.location?.name,
-            realLatitude: state.location?.latitude,
-            realLongitude: state.location?.longitude,
-          );
-          return _buildTimelineList(context, events);
-        }
+              if (state is WeatherError) {
+                return Center(
+                  child: Text(
+                    state.message,
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.5),
+                      fontSize: 16,
+                    ),
+                  ),
+                );
+              }
 
-        return Center(
-          child: Text(
-            'Loading timeline...',
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.4),
-              fontSize: 14,
-            ),
+              if (state is WeatherLoaded) {
+                final events = WeatherAlertDeriver.deriveTimelineEvents(
+                  state.weatherData,
+                  districtName: state.location?.name,
+                  realLatitude: state.location?.latitude,
+                  realLongitude: state.location?.longitude,
+                );
+                return _buildTimelineList(context, events);
+              }
+
+              return Center(
+                child: Text(
+                  l10n.t('timeline.loading'),
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.4),
+                    fontSize: 14,
+                  ),
+                ),
+              );
+            },
           ),
-        );
-      },
+        ),
+      ],
     );
   }
 
   Widget _buildTimelineList(BuildContext context, List<TimelineEvent> events) {
-    final grouped = _groupEventsByDate(events);
+    final l10n = AppLocalizations.of(context);
+    final grouped = _groupEventsByDate(events, l10n);
 
     if (grouped.isEmpty) {
       return Center(
@@ -137,7 +166,7 @@ class _TimelineScreenState extends State<TimelineScreen> {
             ),
             const SizedBox(height: 12),
             Text(
-              'No active alerts',
+              l10n.t('timeline.noActiveAlerts'),
               style: TextStyle(
                 color: Colors.white.withValues(alpha: 0.5),
                 fontSize: 16,
@@ -145,7 +174,7 @@ class _TimelineScreenState extends State<TimelineScreen> {
             ),
             const SizedBox(height: 4),
             Text(
-              'Weather conditions are calm',
+              l10n.t('timeline.conditionsCalm'),
               style: TextStyle(
                 color: Colors.white.withValues(alpha: 0.3),
                 fontSize: 13,
@@ -218,6 +247,7 @@ class _TimelineScreenState extends State<TimelineScreen> {
     bool isFirst,
     bool isLast,
   ) {
+    final l10n = AppLocalizations.of(context);
     final isHighlighted = isFirst;
     final color = event.severity.color;
     final isLifted = event.isLifted;
@@ -313,7 +343,7 @@ class _TimelineScreenState extends State<TimelineScreen> {
                             Row(
                               children: [
                                 Text(
-                                  _getEventTypeLabel(event.type),
+                                  _getEventTypeLabel(event.type, l10n),
                                   style: TextStyle(
                                     color: isLifted
                                         ? Colors.white.withValues(alpha: 0.5)
@@ -335,9 +365,11 @@ class _TimelineScreenState extends State<TimelineScreen> {
                                       ),
                                       borderRadius: BorderRadius.circular(4),
                                     ),
-                                    child: const Text(
-                                      'LIFTED',
-                                      style: TextStyle(
+                                    child: Text(
+                                      AppLocalizations.of(
+                                        context,
+                                      ).t('timeline.info'),
+                                      style: const TextStyle(
                                         color: Colors.white54,
                                         fontSize: 10,
                                         fontWeight: FontWeight.w600,
@@ -378,28 +410,28 @@ class _TimelineScreenState extends State<TimelineScreen> {
     );
   }
 
-  String _getEventTypeLabel(String type) {
+  String _getEventTypeLabel(String type, AppLocalizations l10n) {
     final alertType = SLAlertType.fromString(type);
     if (alertType != null) return alertType.fullLabel;
 
     switch (type) {
       case 'flood':
-        return 'Flood Warning';
+        return l10n.t('timeline.event.flood');
       case 'landslide':
-        return 'Landslide Alert';
+        return l10n.t('timeline.event.landslide');
       case 'cyclone':
-        return 'Cyclone Advisory';
+        return l10n.t('timeline.event.cyclone');
       case 'lightning':
-        return 'Lightning Alert';
+        return l10n.t('timeline.event.lightning');
       case 'coastal':
       case 'coastalWarning':
-        return 'Coastal Warning';
+        return l10n.t('timeline.event.coastal');
       case 'tsunami':
-        return 'Tsunami Bulletin';
+        return l10n.t('timeline.event.tsunami');
       case 'earthquake':
-        return 'Earthquake Info';
+        return l10n.t('timeline.event.earthquake');
       default:
-        return 'Information';
+        return l10n.t('timeline.info');
     }
   }
 
@@ -425,7 +457,10 @@ class _TimelineScreenState extends State<TimelineScreen> {
     }
   }
 
-  List<_DateGroup> _groupEventsByDate(List<TimelineEvent> events) {
+  List<_DateGroup> _groupEventsByDate(
+    List<TimelineEvent> events,
+    AppLocalizations l10n,
+  ) {
     final Map<String, List<TimelineEvent>> groups = {};
 
     for (final event in events) {
@@ -441,15 +476,24 @@ class _TimelineScreenState extends State<TimelineScreen> {
 
       String label;
       if (eventDate == today) {
-        label = 'Today';
+        label = l10n.t('timeline.today');
       } else if (eventDate == yesterday) {
-        label = 'Yesterday';
+        label = l10n.t('timeline.yesterday');
       } else if (eventDate == tomorrow) {
-        label = 'Tomorrow';
+        label = l10n.t('timeline.tomorrow');
       } else {
-        final days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-        label =
-            '${days[event.time.weekday - 1]} ${event.time.month}/${event.time.day}';
+        const weekdayKeys = [
+          'timeline.weekday.mon',
+          'timeline.weekday.tue',
+          'timeline.weekday.wed',
+          'timeline.weekday.thu',
+          'timeline.weekday.fri',
+          'timeline.weekday.sat',
+          'timeline.weekday.sun',
+        ];
+
+        final dayKey = weekdayKeys[event.time.weekday - 1];
+        label = '${l10n.t(dayKey)} ${event.time.month}/${event.time.day}';
       }
 
       groups.putIfAbsent(label, () => []);

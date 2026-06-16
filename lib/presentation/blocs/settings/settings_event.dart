@@ -15,6 +15,15 @@ class ToggleDarkMode extends SettingsEvent {
   const ToggleDarkMode();
 }
 
+class SetLanguage extends SettingsEvent {
+  final AppLanguage language;
+
+  const SetLanguage({required this.language});
+
+  @override
+  List<Object?> get props => [language];
+}
+
 class SetColourVisionMode extends SettingsEvent {
   final ColourVisionMode mode;
 

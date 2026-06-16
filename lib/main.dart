@@ -4,7 +4,9 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'core/di/injection.dart';
 import 'core/router/app_router.dart';
+import 'core/localization/app_localizations.dart';
 import 'core/theme/app_theme.dart';
+import 'presentation/blocs/alerts/alert_bloc.dart';
 import 'presentation/blocs/settings/settings_bloc.dart';
 
 void main() async {
@@ -35,25 +37,37 @@ class NERVApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider.value(
-      value: getIt<SettingsBloc>()..add(const LoadSettings()),
+    return MultiBlocProvider(
+      providers: [
+        BlocProvider.value(
+          value: getIt<SettingsBloc>()..add(const LoadSettings()),
+        ),
+        BlocProvider(
+          create: (_) => getIt<AlertBloc>()..add(const LoadAlerts()),
+        ),
+      ],
       child: BlocBuilder<SettingsBloc, SettingsState>(
         builder: (context, settingsState) {
-          return MaterialApp.router(
-            title: 'NERV Disaster Prevention',
-            debugShowCheckedModeBanner: false,
-            theme: AppTheme.lightTheme(
-              textSizeScale: settingsState.textSizeScale,
-              fontWeightScale: settingsState.fontWeightScale,
+          return AppLocalizationScope(
+            localizations: AppLocalizations(settingsState.language),
+            child: MaterialApp.router(
+              title: 'NERV Disaster Prevention',
+              debugShowCheckedModeBanner: false,
+              theme: AppTheme.lightTheme(
+                textSizeScale: settingsState.textSizeScale,
+                fontWeightScale: settingsState.fontWeightScale,
+              ),
+              darkTheme: AppTheme.darkTheme(
+                visionMode: settingsState.colourVisionMode,
+                contrast: settingsState.contrastMode,
+                textSizeScale: settingsState.textSizeScale,
+                fontWeightScale: settingsState.fontWeightScale,
+              ),
+              themeMode: settingsState.isDarkMode
+                  ? ThemeMode.dark
+                  : ThemeMode.light,
+              routerConfig: AppRouter.router,
             ),
-            darkTheme: AppTheme.darkTheme(
-              visionMode: settingsState.colourVisionMode,
-              contrast: settingsState.contrastMode,
-              textSizeScale: settingsState.textSizeScale,
-              fontWeightScale: settingsState.fontWeightScale,
-            ),
-            themeMode: settingsState.isDarkMode ? ThemeMode.dark : ThemeMode.light,
-            routerConfig: AppRouter.router,
           );
         },
       ),

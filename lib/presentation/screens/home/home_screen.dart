@@ -7,10 +7,13 @@ import '../../../core/di/injection.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_sl_constants.dart';
 import '../../../core/constants/weather_codes.dart';
+import '../../../core/localization/app_localizations.dart';
 import '../../../core/utils/weather_alert_deriver.dart';
 import '../../../domain/entities/location.dart';
+import '../../blocs/alerts/alert_bloc.dart';
 import '../../blocs/weather/weather_bloc.dart';
 import '../../widgets/national_local_toggle.dart';
+import '../../widgets/sos_alert_banner.dart';
 import '../../widgets/stale_data_banner.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -19,17 +22,18 @@ class HomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
-      create: (_) => getIt<WeatherBloc>()..add(
-        LoadWeather(
-          location: const Location(
-            id: 'island_wide',
-            name: 'Sri Lanka',
-            country: 'Sri Lanka',
-            latitude: 7.8731,
-            longitude: 80.7718,
+      create: (_) => getIt<WeatherBloc>()
+        ..add(
+          LoadWeather(
+            location: const Location(
+              id: 'island_wide',
+              name: 'Sri Lanka',
+              country: 'Sri Lanka',
+              latitude: 7.8731,
+              longitude: 80.7718,
+            ),
           ),
         ),
-      ),
       child: const HomeScreenContent(),
     );
   }
@@ -74,7 +78,9 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
   Widget build(BuildContext context) {
     return BlocListener<WeatherBloc, WeatherState>(
       listener: (context, state) {
-        if (!_isIslandWide && state is WeatherLoaded && state.location != null) {
+        if (!_isIslandWide &&
+            state is WeatherLoaded &&
+            state.location != null) {
           final loc = state.location!;
           final newLatLng = LatLng(loc.latitude, loc.longitude);
           if (_gpsLocation != newLatLng) {
@@ -95,59 +101,12 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
                 onChanged: _onToggleChanged,
               ),
             ),
-            // Support banner
-            _buildSupporterBanner(context),
             // Map section
             Expanded(flex: 55, child: _buildMapSection(context)),
             // Weather & Alert section
             Expanded(flex: 45, child: _buildWeatherAlertSection(context)),
           ],
         ),
-      ),
-    );
-  }
-
-  // ── Supporter Banner ─────────────────────────────────────────────────
-
-  Widget _buildSupporterBanner(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1A1A1A),
-        border: Border(
-          bottom: BorderSide(
-            color: Colors.white.withValues(alpha: 0.06),
-            width: 0.5,
-          ),
-        ),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            'Join as a Supporter',
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.7),
-              fontSize: 13,
-            ),
-          ),
-          Row(
-            children: [
-              Text(
-                'Learn More',
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.5),
-                  fontSize: 13,
-                ),
-              ),
-              Icon(
-                Icons.chevron_right,
-                color: Colors.white.withValues(alpha: 0.5),
-                size: 18,
-              ),
-            ],
-          ),
-        ],
       ),
     );
   }
@@ -178,7 +137,9 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
           child: FlutterMap(
             mapController: _mapController,
             options: MapOptions(
-              initialCenter: _isIslandWide ? SLMapConstants.center : (_gpsLocation ?? SLMapConstants.center),
+              initialCenter: _isIslandWide
+                  ? SLMapConstants.center
+                  : (_gpsLocation ?? SLMapConstants.center),
               initialZoom: _isIslandWide ? SLMapConstants.initialZoom : 12.0,
               minZoom: SLMapConstants.minZoom,
               maxZoom: SLMapConstants.maxZoom,
@@ -218,6 +179,8 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
   // ── Weather + Alert Section ──────────────────────────────────────────
 
   Widget _buildWeatherAlertSection(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+
     return Container(
       color: Colors.black,
       child: BlocBuilder<WeatherBloc, WeatherState>(
@@ -233,7 +196,7 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
               child: Padding(
                 padding: const EdgeInsets.all(24),
                 child: Text(
-                  'Weather data unavailable',
+                  l10n.t('home.weatherUnavailable'),
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: 0.5),
                     fontSize: 16,
@@ -250,7 +213,7 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
           // WeatherInitial — show placeholder
           return Center(
             child: Text(
-              'Loading weather...',
+              l10n.t('home.loadingWeather'),
               style: TextStyle(
                 color: Colors.white.withValues(alpha: 0.4),
                 fontSize: 14,
@@ -263,6 +226,7 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
   }
 
   Widget _buildLoadedContent(BuildContext context, WeatherLoaded state) {
+    final l10n = AppLocalizations.of(context);
     final data = state.weatherData;
     final current = data.current;
     final alerts = WeatherAlertDeriver.deriveAlerts(
@@ -270,53 +234,109 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
       districtName: state.location?.name,
     );
 
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
-      children: [
-        // Stale data banner
-        if (state.isStaleCache)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 4),
-            child: StaleDataBanner(lastUpdated: data.lastUpdated),
+    return RefreshIndicator(
+      color: const Color(0xFF00BCD4),
+      backgroundColor: const Color(0xFF1A1A1A),
+      onRefresh: () async {
+        // Refresh both the local weather and the upstream SOS pipeline.
+        context.read<WeatherBloc>().add(const RefreshWeather());
+        context.read<AlertBloc>().add(const RefreshAlerts());
+        await context.read<AlertBloc>().stream.firstWhere(
+          (s) => s is AlertLoaded || s is AlertError,
+        );
+      },
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+        children: [
+          // ── SOS / critical alerts from upstream ──
+          BlocBuilder<AlertBloc, AlertState>(
+            builder: (context, alertState) {
+              if (alertState is AlertLoaded && alertState.alerts.isNotEmpty) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (alertState.isStaleCache)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 6),
+                        child: Text(
+                          '${l10n.t('home.sosStalePrefix')}${_formatRelativeTime(alertState.lastFetched)}',
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.4),
+                            fontSize: 11,
+                          ),
+                        ),
+                      ),
+                    ...alertState.alerts.map(
+                      (a) => SosAlertBanner(
+                        alert: a,
+                        onTap: () {
+                          // Future: navigate to an alert-detail screen.
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                );
+              }
+              return const SizedBox.shrink();
+            },
           ),
+          // Stale data banner
+          if (state.isStaleCache)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: StaleDataBanner(lastUpdated: data.lastUpdated),
+            ),
 
-        // Section header
-        Text(
-          _isIslandWide
-              ? 'Island-wide'
-              : state.location?.name ?? 'Local',
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 24,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        const SizedBox(height: 8),
-
-        // ── Current conditions chip ──
-        _buildCurrentConditionsChip(current, state.location?.name),
-        const SizedBox(height: 16),
-
-        // ── Derived alerts ──
-        ...alerts.map(
-          (alert) => Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: _buildAlertInfoCard(
-              title: alert.title,
-              alertType: alert.alertType,
-              severity: alert.severity,
-              timestamp:
-                  'As of ${alert.timestamp.year}/'
-                  '${alert.timestamp.month.toString().padLeft(2, '0')}/'
-                  '${alert.timestamp.day.toString().padLeft(2, '0')}  '
-                  '${alert.timestamp.hour.toString().padLeft(2, '0')}:'
-                  '${alert.timestamp.minute.toString().padLeft(2, '0')}',
-              description: alert.description,
+          // Section header
+          Text(
+            _isIslandWide
+                ? l10n.t('home.islandWide')
+                : state.location?.name ?? l10n.t('home.local'),
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 24,
+              fontWeight: FontWeight.w700,
             ),
           ),
-        ),
-      ],
+          const SizedBox(height: 8),
+
+          // ── Current conditions chip ──
+          _buildCurrentConditionsChip(current, state.location?.name),
+          const SizedBox(height: 16),
+
+          // ── Derived alerts ──
+          ...alerts.map(
+            (alert) => Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: _buildAlertInfoCard(
+                title: alert.title,
+                alertType: alert.alertType,
+                severity: alert.severity,
+                timestamp:
+                    'As of ${alert.timestamp.year}/'
+                    '${alert.timestamp.month.toString().padLeft(2, '0')}/'
+                    '${alert.timestamp.day.toString().padLeft(2, '0')}  '
+                    '${alert.timestamp.hour.toString().padLeft(2, '0')}:'
+                    '${alert.timestamp.minute.toString().padLeft(2, '0')}',
+                description: alert.description,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
+  }
+
+  /// Human-friendly relative time used for the "last updated" hint
+  /// under stale SOS alerts.
+  static String _formatRelativeTime(DateTime? then) {
+    if (then == null) return 'never';
+    final delta = DateTime.now().difference(then);
+    if (delta.inMinutes < 1) return 'just now';
+    if (delta.inMinutes < 60) return '${delta.inMinutes} min ago';
+    if (delta.inHours < 24) return '${delta.inHours} hr ago';
+    return '${delta.inDays} d ago';
   }
 
   // ── Current Conditions Chip ──────────────────────────────────────────
@@ -326,8 +346,14 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
     final feelsLike = current.apparentTemperature;
     final humidity = current.humidity;
     final windSpeed = current.windSpeed;
-    final weatherDesc = WeatherCodeMapping.getDescription(current.weatherCode, isDay: current.isDay);
-    final weatherEmoji = WeatherCodeMapping.getIcon(current.weatherCode, isDay: current.isDay);
+    final weatherDesc = WeatherCodeMapping.getDescription(
+      current.weatherCode,
+      isDay: current.isDay,
+    );
+    final weatherEmoji = WeatherCodeMapping.getIcon(
+      current.weatherCode,
+      isDay: current.isDay,
+    );
 
     return Container(
       padding: const EdgeInsets.all(16),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/constants/app_constants.dart';
+import '../../core/localization/app_localizations.dart';
 
 class MainScaffold extends StatefulWidget {
   final Widget child;
@@ -16,12 +17,28 @@ class _MainScaffoldState extends State<MainScaffold> {
 
   static const _routes = ['/home', '/timeline', '/map', '/weather', '/menu'];
 
-  static const _navItems = [
-    _NavItem(label: 'Home', icon: Icons.home_outlined, selectedIcon: Icons.home),
-    _NavItem(label: 'Timeline', icon: Icons.fact_check_outlined, selectedIcon: Icons.fact_check),
-    _NavItem(label: 'Map', icon: Icons.cloud_outlined, selectedIcon: Icons.cloud),
-    _NavItem(label: 'Weather', icon: Icons.wb_sunny_outlined, selectedIcon: Icons.wb_sunny),
-    _NavItem(label: 'Menu', icon: Icons.menu, selectedIcon: Icons.menu),
+  static const _navItemsBase = [
+    _NavItemKey(
+      'nav.home',
+      icon: Icons.home_outlined,
+      selectedIcon: Icons.home,
+    ),
+    _NavItemKey(
+      'nav.timeline',
+      icon: Icons.fact_check_outlined,
+      selectedIcon: Icons.fact_check,
+    ),
+    _NavItemKey(
+      'nav.map',
+      icon: Icons.cloud_outlined,
+      selectedIcon: Icons.cloud,
+    ),
+    _NavItemKey(
+      'nav.weather',
+      icon: Icons.wb_sunny_outlined,
+      selectedIcon: Icons.wb_sunny,
+    ),
+    _NavItemKey('nav.menu', icon: Icons.menu, selectedIcon: Icons.menu),
   ];
 
   void _onItemTapped(int index) {
@@ -45,6 +62,8 @@ class _MainScaffoldState extends State<MainScaffold> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
+    final l10n = AppLocalizations.of(context);
+
     return Scaffold(
       body: widget.child,
       bottomNavigationBar: Container(
@@ -60,13 +79,15 @@ class _MainScaffoldState extends State<MainScaffold> {
         child: NavigationBar(
           selectedIndex: _currentIndex,
           onDestinationSelected: _onItemTapped,
-          height: AppConstants.bottomNavHeight + MediaQuery.of(context).padding.bottom,
+          height:
+              AppConstants.bottomNavHeight +
+              MediaQuery.of(context).padding.bottom,
           labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-          destinations: _navItems.map((item) {
+          destinations: _navItemsBase.map((item) {
             return NavigationDestination(
               icon: Icon(item.icon),
               selectedIcon: Icon(item.selectedIcon),
-              label: item.label,
+              label: l10n.t(item.labelKey),
             );
           }).toList(),
         ),
@@ -75,13 +96,13 @@ class _MainScaffoldState extends State<MainScaffold> {
   }
 }
 
-class _NavItem {
-  final String label;
+class _NavItemKey {
+  final String labelKey;
   final IconData icon;
   final IconData selectedIcon;
 
-  const _NavItem({
-    required this.label,
+  const _NavItemKey(
+    this.labelKey, {
     required this.icon,
     required this.selectedIcon,
   });

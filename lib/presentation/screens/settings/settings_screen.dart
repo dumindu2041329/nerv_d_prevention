@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../core/constants/constants.dart';
+import '../../../core/localization/app_localizations.dart';
 import '../../blocs/settings/settings_bloc.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -33,6 +34,7 @@ class SettingsScreen extends StatelessWidget {
 
   Widget _buildHeader(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
 
     return Container(
       padding: const EdgeInsets.fromLTRB(
@@ -44,7 +46,7 @@ class SettingsScreen extends StatelessWidget {
       child: Row(
         children: [
           Text(
-            'Settings',
+            l10n.t('settings.title'),
             style: theme.textTheme.titleLarge?.copyWith(
               fontWeight: FontWeight.w700,
             ),
@@ -56,6 +58,7 @@ class SettingsScreen extends StatelessWidget {
 
   Widget _buildAccessibilitySection(BuildContext context, SettingsState state) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
 
     return Padding(
       padding: const EdgeInsets.all(AppSpacing.space5),
@@ -64,8 +67,8 @@ class SettingsScreen extends StatelessWidget {
         children: [
           _buildSectionHeader(
             context,
-            title: 'Accessibility',
-            subtitle: 'Display & Text',
+            title: l10n.t('settings.accessibility'),
+            subtitle: l10n.t('settings.displayText'),
             icon: Icons.accessibility_new,
           ),
           const SizedBox(height: AppSpacing.space3),
@@ -82,7 +85,7 @@ class SettingsScreen extends StatelessWidget {
                 _buildSettingsTile(
                   context,
                   icon: Icons.dark_mode,
-                  title: 'Dark Mode',
+                  title: l10n.t('settings.darkMode'),
                   trailing: Switch(
                     value: state.isDarkMode,
                     onChanged: (_) {
@@ -95,7 +98,7 @@ class SettingsScreen extends StatelessWidget {
                 _buildSettingsTile(
                   context,
                   icon: Icons.text_fields,
-                  title: 'Text Size',
+                  title: l10n.t('settings.textSize'),
                   subtitle: 'Font Size: ${state.textSizeScale.label}',
                   onTap: () => _showTextSizeSelector(context, state),
                 ),
@@ -103,7 +106,7 @@ class SettingsScreen extends StatelessWidget {
                 _buildSettingsTile(
                   context,
                   icon: Icons.format_size,
-                  title: 'Font Weight',
+                  title: l10n.t('settings.fontWeight'),
                   subtitle:
                       'Font Weight: ${_getFontWeightLabel(state.fontWeightScale)}',
                   onTap: () => _showFontWeightSelector(context, state),
@@ -112,7 +115,7 @@ class SettingsScreen extends StatelessWidget {
                 _buildSettingsTile(
                   context,
                   icon: Icons.palette_outlined,
-                  title: 'Colour Vision',
+                  title: l10n.t('settings.colourVision'),
                   subtitle: 'Colour Vision: ${state.colourVisionMode.label}',
                   onTap: () => _showColourVisionSelector(context, state),
                 ),
@@ -120,7 +123,7 @@ class SettingsScreen extends StatelessWidget {
                 _buildSettingsTile(
                   context,
                   icon: Icons.contrast,
-                  title: 'Contrast',
+                  title: l10n.t('settings.contrast'),
                   subtitle: 'Contrast: ${state.contrastMode.label}',
                   onTap: () => _showContrastSelector(context, state),
                 ),
@@ -134,6 +137,7 @@ class SettingsScreen extends StatelessWidget {
 
   Widget _buildNotificationSection(BuildContext context, SettingsState state) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.space5),
@@ -142,8 +146,8 @@ class SettingsScreen extends StatelessWidget {
         children: [
           _buildSectionHeader(
             context,
-            title: 'Notifications',
-            subtitle: 'Alert Settings',
+            title: l10n.t('settings.notifications'),
+            subtitle: l10n.t('settings.alertSettings'),
             icon: Icons.notifications_outlined,
           ),
           const SizedBox(height: AppSpacing.space3),
@@ -159,7 +163,7 @@ class SettingsScreen extends StatelessWidget {
               children: [
                 _buildNotificationToggle(
                   context,
-                  title: 'Critical Alerts',
+                  title: l10n.t('settings.criticalAlerts'),
                   subtitle: 'Emergency Warnings',
                   value: true,
                   onChanged: (_) {},
@@ -167,7 +171,7 @@ class SettingsScreen extends StatelessWidget {
                 Divider(height: 1, color: theme.dividerTheme.color),
                 _buildNotificationToggle(
                   context,
-                  title: 'Flood Alerts',
+                  title: l10n.t('settings.floodAlerts'),
                   subtitle: 'River & Urban Flooding',
                   value: true,
                   onChanged: (_) {},
@@ -175,7 +179,7 @@ class SettingsScreen extends StatelessWidget {
                 Divider(height: 1, color: theme.dividerTheme.color),
                 _buildNotificationToggle(
                   context,
-                  title: 'Landslide Alerts',
+                  title: l10n.t('settings.landslideAlerts'),
                   subtitle: 'Slope Failure Warnings',
                   value: true,
                   onChanged: (_) {},
@@ -183,7 +187,7 @@ class SettingsScreen extends StatelessWidget {
                 Divider(height: 1, color: theme.dividerTheme.color),
                 _buildNotificationToggle(
                   context,
-                  title: 'Cyclone Advisories',
+                  title: l10n.t('settings.cycloneAdvisories'),
                   subtitle: 'Tropical Storm Warnings',
                   value: true,
                   onChanged: (_) {},
@@ -191,7 +195,7 @@ class SettingsScreen extends StatelessWidget {
                 Divider(height: 1, color: theme.dividerTheme.color),
                 _buildNotificationToggle(
                   context,
-                  title: 'Lightning Alerts',
+                  title: l10n.t('settings.lightningAlerts'),
                   subtitle: 'High Lightning Activity',
                   value: true,
                   onChanged: (_) {},
@@ -199,7 +203,7 @@ class SettingsScreen extends StatelessWidget {
                 Divider(height: 1, color: theme.dividerTheme.color),
                 _buildNotificationToggle(
                   context,
-                  title: 'Coastal Warnings',
+                  title: l10n.t('settings.coastalWarnings'),
                   subtitle: 'High Waves & Storm Surge',
                   value: true,
                   onChanged: (_) {},
@@ -207,7 +211,7 @@ class SettingsScreen extends StatelessWidget {
                 Divider(height: 1, color: theme.dividerTheme.color),
                 _buildNotificationToggle(
                   context,
-                  title: 'Tsunami Bulletins',
+                  title: l10n.t('settings.tsunamiBulletins'),
                   subtitle: 'Ocean Seismic Warnings',
                   value: true,
                   onChanged: (_) {},
@@ -222,6 +226,7 @@ class SettingsScreen extends StatelessWidget {
 
   Widget _buildAboutSection(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
 
     return Padding(
       padding: const EdgeInsets.all(AppSpacing.space5),
@@ -230,8 +235,8 @@ class SettingsScreen extends StatelessWidget {
         children: [
           _buildSectionHeader(
             context,
-            title: 'About',
-            subtitle: 'App Information',
+            title: l10n.t('settings.about'),
+            subtitle: l10n.t('settings.appInformation'),
             icon: Icons.info_outline,
           ),
           const SizedBox(height: AppSpacing.space3),
@@ -248,21 +253,21 @@ class SettingsScreen extends StatelessWidget {
                 _buildSettingsTile(
                   context,
                   icon: Icons.help_outline,
-                  title: 'About NERV',
+                  title: l10n.t('settings.aboutNerv'),
                   onTap: () => _showAboutDialog(context),
                 ),
                 Divider(height: 1, color: theme.dividerTheme.color),
                 _buildSettingsTile(
                   context,
                   icon: Icons.privacy_tip_outlined,
-                  title: 'Privacy Policy',
+                  title: l10n.t('settings.privacyPolicy'),
                   onTap: () {},
                 ),
                 Divider(height: 1, color: theme.dividerTheme.color),
                 _buildSettingsTile(
                   context,
                   icon: Icons.description_outlined,
-                  title: 'Terms of Service',
+                  title: l10n.t('settings.termsOfService'),
                   onTap: () {},
                 ),
               ],
@@ -275,6 +280,7 @@ class SettingsScreen extends StatelessWidget {
 
   Widget _buildFooter(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
 
     return Padding(
       padding: const EdgeInsets.symmetric(
@@ -306,14 +312,14 @@ class SettingsScreen extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.space2),
           Text(
-            'Version 1.0.0',
+            l10n.t('settings.version'),
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
             ),
           ),
           const SizedBox(height: AppSpacing.space2),
           Text(
-            'Weather data: Open-Meteo',
+            l10n.t('settings.weatherOpenMeteo'),
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
               fontSize: 10,
@@ -321,7 +327,7 @@ class SettingsScreen extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.space1),
           Text(
-            'Alerts: DMC Sri Lanka',
+            l10n.t('settings.alertsDmc'),
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
               fontSize: 10,

@@ -3,6 +3,8 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/constants/app_sl_constants.dart';
+import '../../../core/di/injection.dart';
+import '../../../data/remote/landslides/landslide_api_client.dart';
 
 enum _HazardTab { rain, landslide, flooding, inundation }
 
@@ -43,12 +45,27 @@ class _HazardPoint {
   const _HazardPoint(this.location, this.severity);
 }
 
+_Severity _severityFromString(String s) {
+  switch (s) {
+    case 'caution':
+      return _Severity.caution;
+    case 'danger':
+      return _Severity.danger;
+    case 'emergency':
+      return _Severity.emergency;
+    case 'advisory':
+    default:
+      return _Severity.advisory;
+  }
+}
+
 /// Mock risk area data for Sri Lanka districts, grouped by hazard type.
+/// Landslide data is loaded from the API; this list is the fallback when
+/// the API call returns nothing (e.g. offline).
 const Map<_HazardTab, List<_HazardPoint>> _hazardData = {
   _HazardTab.rain: [],
   _HazardTab.landslide: [
     _HazardPoint(LatLng(6.9497, 80.7891), _Severity.advisory), // Nuwara Eliya
-    _HazardPoint(LatLng(6.9820, 80.7800), _Severity.advisory),
     _HazardPoint(LatLng(7.2906, 80.6337), _Severity.advisory), // Kandy
     _HazardPoint(LatLng(6.9897, 81.0557), _Severity.advisory), // Badulla
     _HazardPoint(LatLng(6.6828, 80.3994), _Severity.advisory), // Ratnapura
@@ -90,6 +107,8 @@ class _HazardMapScreenState extends State<HazardMapScreen> {
   _HazardTab _tab = _HazardTab.rain;
   final MapController _mapController = MapController();
   late String _displayedTime;
+  List<_HazardPoint> _landslidePoints = const [];
+  bool _landslideLoading = false;
 
   @override
   void initState() {
@@ -97,6 +116,29 @@ class _HazardMapScreenState extends State<HazardMapScreen> {
     final now = DateTime.now();
     _displayedTime =
         '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+    _fetchLandslides();
+  }
+
+  Future<void> _fetchLandslides() async {
+    if (_landslideLoading) return;
+    setState(() => _landslideLoading = true);
+    final client = getIt<LandslideApiClient>();
+    final features = await client.getSriLankaLandslides();
+    if (!mounted) return;
+    setState(() {
+      _landslideLoading = false;
+      if (features.isNotEmpty) {
+        _landslidePoints = features
+            .map((f) => _HazardPoint(
+                  f.location,
+                  _severityFromString(f.severity),
+                ))
+            .toList();
+      } else {
+        // API returned nothing usable — keep the fallback list.
+        _landslidePoints = const [];
+      }
+    });
   }
 
   String get _title {
@@ -171,7 +213,14 @@ class _HazardMapScreenState extends State<HazardMapScreen> {
   // ── Risk Layer ──────────────────────────────────────────────────────
 
   Widget _buildRiskLayer() {
-    final points = _hazardData[_tab] ?? const [];
+    // Use API data for the landslide tab when available, otherwise fall
+    // back to the bundled mock list. Other tabs use their mock data.
+    final List<_HazardPoint> points;
+    if (_tab == _HazardTab.landslide && _landslidePoints.isNotEmpty) {
+      points = _landslidePoints;
+    } else {
+      points = _hazardData[_tab] ?? const [];
+    }
     if (points.isEmpty) return const SizedBox.shrink();
     return CircleLayer(
       circles: points.map((p) {

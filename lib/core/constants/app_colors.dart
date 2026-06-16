@@ -136,3 +136,45 @@ enum FontWeightScale {
     }
   }
 }
+
+/// Supported application languages.
+enum AppLanguage {
+  english,
+  sinhala,
+  tamil;
+
+  /// Stored as an integer in Hive (see SettingsRepositoryImpl).
+  int get hiveValue {
+    switch (this) {
+      case AppLanguage.english:
+        return 0;
+      case AppLanguage.sinhala:
+        return 1;
+      case AppLanguage.tamil:
+        return 2;
+    }
+  }
+
+  static AppLanguage fromHiveValue(int? hiveValue) {
+    switch (hiveValue) {
+      case 1:
+        return AppLanguage.sinhala;
+      case 2:
+        return AppLanguage.tamil;
+      case 0:
+      default:
+        return AppLanguage.english;
+    }
+  }
+
+  String get label {
+    switch (this) {
+      case AppLanguage.english:
+        return 'English';
+      case AppLanguage.sinhala:
+        return 'සිංහල';
+      case AppLanguage.tamil:
+        return 'தமிழ்';
+    }
+  }
+}

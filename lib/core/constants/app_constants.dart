@@ -8,6 +8,7 @@ class ApiConstants {
 
   static const String weatherApiBaseUrl = 'https://api.weatherapi.com/v1';
   static const String mapTilerGeocodingBaseUrl = 'https://api.maptiler.com/geocoding';
+  static const String overpassBaseUrl = 'https://overpass-api.de/api/interpreter';
 
   static const Duration currentWeatherCacheTtl = Duration(minutes: 10);
   static const Duration hourlyForecastCacheTtl = Duration(hours: 1);
