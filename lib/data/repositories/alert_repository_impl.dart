@@ -1,4 +1,5 @@
 import '../../../core/constants/app_constants.dart';
+import '../../../core/constants/app_colors.dart';
 import '../../../domain/entities/alert.dart';
 import '../../../domain/repositories/alert_repository.dart';
 import '../local/hive/hive_service.dart';
@@ -20,8 +21,8 @@ class AlertRepositoryImpl implements AlertRepository {
   AlertRepositoryImpl({
     required SosAlertApiClient apiClient,
     required HiveService hiveService,
-  })  : _apiClient = apiClient,
-        _hiveService = hiveService {
+  }) : _apiClient = apiClient,
+       _hiveService = hiveService {
     _alerts = _hiveService.getCachedSosAlerts() ?? const [];
     _lastFetched = _hiveService.getSosAlertsCacheTimestamp();
   }
@@ -58,7 +59,37 @@ class AlertRepositoryImpl implements AlertRepository {
       await _hiveService.cacheSosAlerts(sorted);
     } catch (_) {
       // Network / parse failure — serve cached if we have any.
+      // If this is the first app run and there is no cache yet, generate
+      // a deterministic offline fallback so SOS UI still works.
+      if (_alerts.isEmpty) {
+        final fallback = _generateOfflineFallback();
+        _alerts = _sortBySeverity(fallback);
+        _lastFetched = DateTime.now();
+        await _hiveService.cacheSosAlerts(_alerts);
+      }
     }
+  }
+
+  List<Alert> _generateOfflineFallback() {
+    final now = DateTime.now();
+
+    // These are generic, user-facing examples meant to keep the SOS
+    // feature functional offline. Severity ordering will be handled by
+    // _sortBySeverity().
+    return [
+      Alert(
+        id: 'offline_demo_1',
+        type: 'sos_offline_demo',
+        headline: 'Offline SOS Alert',
+        description:
+            'SOS alerts are currently unavailable due to no network. This offline demo alert keeps the feature working.',
+        severity: SeverityLevel.info,
+        issuedTime: now.subtract(const Duration(hours: 1)),
+        expiryTime: now.add(const Duration(hours: 5)),
+        location: 'Sri Lanka',
+        metadata: const {'offline': true},
+      ),
+    ];
   }
 
   /// GDACS is the only source, so it returns its events in a stable

@@ -9,8 +9,10 @@ class MenuScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: theme.colorScheme.surface,
       body: SafeArea(
         child: BlocBuilder<SettingsBloc, SettingsState>(
           builder: (context, state) {
@@ -35,15 +37,17 @@ class MenuScreen extends StatelessWidget {
 
   Widget _buildTitle(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 16),
       child: Center(
         child: Text(
           l10n.t('menu.title'),
-          style: const TextStyle(
-            color: Colors.white,
+          style: theme.textTheme.titleMedium?.copyWith(
             fontSize: 18,
             fontWeight: FontWeight.w600,
+            color: theme.colorScheme.onSurface,
           ),
         ),
       ),
@@ -70,6 +74,8 @@ class MenuScreen extends StatelessWidget {
   }
 
   Widget _buildSavedRegions(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Container(
       padding: const EdgeInsets.all(20),
       child: Column(
@@ -77,20 +83,20 @@ class MenuScreen extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Text(
+              Text(
                 'Saved Regions',
-                style: TextStyle(
-                  color: Colors.white,
+                style: theme.textTheme.titleSmall?.copyWith(
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
+                  color: theme.colorScheme.onSurface,
                 ),
               ),
               const SizedBox(width: 12),
               Text(
                 '0 / 3',
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.5),
+                style: theme.textTheme.bodySmall?.copyWith(
                   fontSize: 14,
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
                 ),
               ),
             ],
@@ -99,15 +105,18 @@ class MenuScreen extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
+              Text(
                 'None',
-                style: TextStyle(color: Colors.white, fontSize: 14),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  fontSize: 14,
+                  color: theme.colorScheme.onSurface,
+                ),
               ),
               Text(
                 'You can add up to 3 regions',
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.4),
+                style: theme.textTheme.bodySmall?.copyWith(
                   fontSize: 12,
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
                 ),
               ),
             ],
@@ -122,18 +131,22 @@ class MenuScreen extends StatelessWidget {
                   vertical: 12,
                 ),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF00BCD4),
+                  color: theme.colorScheme.secondary,
                   borderRadius: BorderRadius.circular(24),
                 ),
-                child: const Row(
+                child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.add, color: Colors.white, size: 20),
-                    SizedBox(width: 8),
+                    Icon(
+                      Icons.add,
+                      color: theme.colorScheme.onSecondary,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
                     Text(
                       'Add',
-                      style: TextStyle(
-                        color: Colors.white,
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        color: theme.colorScheme.onSecondary,
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
                       ),
@@ -144,7 +157,10 @@ class MenuScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 8),
-          Divider(color: Colors.white.withValues(alpha: 0.1), height: 1),
+          Divider(
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.1),
+            height: 1,
+          ),
         ],
       ),
     );
@@ -155,18 +171,60 @@ class MenuScreen extends StatelessWidget {
     SettingsState state,
     AppLocalizations l10n,
   ) {
+    final theme = Theme.of(context);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildSectionTitle(l10n.t('settings.title')),
+        _buildSectionTitle(context, l10n.t('settings.title')),
         _buildMenuItem(
+          context,
           l10n.t('menu.language'),
           trailing: l10n.t(_languageKey(state.language)),
           onTap: () => _showLanguageSelector(context, state.language),
         ),
-        _buildMenuItem('Appearance'),
-        _buildMenuItem(l10n.t('settings.notifications')),
-        _buildMenuItem('Widget Settings'),
+        InkWell(
+          onTap: () => _showAppearanceSelector(context, state.isDarkMode),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            decoration: BoxDecoration(
+              border: Border(
+                bottom: BorderSide(
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.06),
+                  width: 0.5,
+                ),
+              ),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Appearance',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontSize: 15,
+                      color: theme.colorScheme.onSurface,
+                    ),
+                  ),
+                ),
+                Text(
+                  state.isDarkMode ? 'Dark' : 'Light',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    fontSize: 14,
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Icon(
+                  state.isDarkMode ? Icons.dark_mode : Icons.light_mode,
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
+                  size: 20,
+                ),
+              ],
+            ),
+          ),
+        ),
+        _buildMenuItem(context, l10n.t('settings.notifications')),
+        _buildMenuItem(context, 'Widget Settings'),
       ],
     );
   }
@@ -176,44 +234,50 @@ class MenuScreen extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: 8),
-        _buildSectionTitle(l10n.t('menu.about')),
+        _buildSectionTitle(context, l10n.t('menu.about')),
         _buildMenuItem(
+          context,
           l10n.t('menu.version'),
           trailing: '1.0.0',
           showChevron: false,
         ),
-        _buildMenuItem('News'),
-        _buildMenuItem('Remarks'),
-        _buildMenuItem(l10n.t('settings.termsOfService')),
-        _buildMenuItem(l10n.t('settings.privacyPolicy')),
-        _buildMenuItem('License Information'),
-        _buildMenuItem('Contact Us'),
+        _buildMenuItem(context, 'News'),
+        _buildMenuItem(context, 'Remarks'),
+        _buildMenuItem(context, l10n.t('settings.termsOfService')),
+        _buildMenuItem(context, l10n.t('settings.privacyPolicy')),
+        _buildMenuItem(context, 'License Information'),
+        _buildMenuItem(context, 'Contact Us'),
       ],
     );
   }
 
-  Widget _buildSectionTitle(String title) {
+  Widget _buildSectionTitle(BuildContext context, String title) {
+    final theme = Theme.of(context);
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
-      color: const Color(0xFF0E0E0E),
+      color: theme.colorScheme.surfaceTint.withValues(alpha: 0.12),
       child: Text(
         title,
-        style: const TextStyle(
-          color: Colors.white,
+        style: theme.textTheme.titleMedium?.copyWith(
           fontSize: 15,
           fontWeight: FontWeight.w700,
+          color: theme.colorScheme.onSurface,
         ),
       ),
     );
   }
 
   Widget _buildMenuItem(
+    BuildContext context,
     String title, {
     String? trailing,
     bool showChevron = true,
     VoidCallback? onTap,
   }) {
+    final theme = Theme.of(context);
+
     return InkWell(
       onTap: onTap ?? () {},
       child: Container(
@@ -221,7 +285,7 @@ class MenuScreen extends StatelessWidget {
         decoration: BoxDecoration(
           border: Border(
             bottom: BorderSide(
-              color: Colors.white.withValues(alpha: 0.06),
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.06),
               width: 0.5,
             ),
           ),
@@ -231,22 +295,25 @@ class MenuScreen extends StatelessWidget {
             Expanded(
               child: Text(
                 title,
-                style: const TextStyle(color: Colors.white, fontSize: 15),
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontSize: 15,
+                  color: theme.colorScheme.onSurface,
+                ),
               ),
             ),
             if (trailing != null)
               Text(
                 trailing,
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.5),
+                style: theme.textTheme.bodySmall?.copyWith(
                   fontSize: 14,
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
                 ),
               ),
             if (showChevron) ...[
               const SizedBox(width: 8),
               Icon(
                 Icons.chevron_right,
-                color: Colors.white.withValues(alpha: 0.3),
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
                 size: 20,
               ),
             ],
@@ -257,6 +324,8 @@ class MenuScreen extends StatelessWidget {
   }
 
   Widget _buildFooter(BuildContext context, AppLocalizations l10n) {
+    final theme = Theme.of(context);
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 40),
       child: Column(
@@ -266,14 +335,14 @@ class MenuScreen extends StatelessWidget {
             children: [
               Icon(
                 Icons.shield_outlined,
-                color: Colors.white.withValues(alpha: 0.3),
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
                 size: 18,
               ),
               const SizedBox(width: 8),
               Text(
                 'ゲヒルン危機管理局',
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.3),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
                   fontSize: 13,
                 ),
               ),
@@ -282,8 +351,8 @@ class MenuScreen extends StatelessWidget {
           const SizedBox(height: 4),
           Text(
             l10n.t('settings.alertsDmc'),
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.2),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.2),
               fontSize: 11,
             ),
           ),
@@ -301,6 +370,61 @@ class MenuScreen extends StatelessWidget {
       case AppLanguage.tamil:
         return 'menu.language.tamil';
     }
+  }
+
+  void _showAppearanceSelector(BuildContext context, bool isDarkMode) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (sheetContext) {
+        final theme = Theme.of(context);
+
+        return SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Appearance',
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                ListTile(
+                  title: const Text('Light'),
+                  selected: !isDarkMode,
+                  trailing: !isDarkMode ? const Icon(Icons.check) : null,
+                  onTap: () {
+                    if (isDarkMode) {
+                      context.read<SettingsBloc>().add(const ToggleDarkMode());
+                    }
+                    Navigator.pop(sheetContext);
+                  },
+                ),
+                ListTile(
+                  title: const Text('Dark'),
+                  selected: isDarkMode,
+                  trailing: isDarkMode ? const Icon(Icons.check) : null,
+                  onTap: () {
+                    if (!isDarkMode) {
+                      context.read<SettingsBloc>().add(const ToggleDarkMode());
+                    }
+                    Navigator.pop(sheetContext);
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   void _showLanguageSelector(BuildContext context, AppLanguage current) {

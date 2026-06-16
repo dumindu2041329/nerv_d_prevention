@@ -93,12 +93,40 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
         backgroundColor: Colors.black,
         body: Column(
           children: [
-            // Top toggle bar — Island-wide / Local
+            // Top toggle bar — Island-wide / Local + SOS fetch button
             SafeArea(
               bottom: false,
-              child: NationalLocalToggle(
-                isNational: _isIslandWide,
-                onChanged: _onToggleChanged,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: NationalLocalToggle(
+                        isNational: _isIslandWide,
+                        onChanged: _onToggleChanged,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    ElevatedButton.icon(
+                      onPressed: () {
+                        context.read<AlertBloc>().add(const RefreshAlerts());
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF00BCD4),
+                        foregroundColor: Colors.black,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      icon: const Icon(Icons.sos_outlined),
+                      label: const Text('SOS Alerts'),
+                    ),
+                  ],
+                ),
               ),
             ),
             // Map section

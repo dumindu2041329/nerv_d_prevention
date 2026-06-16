@@ -14,6 +14,7 @@ import '../../domain/repositories/settings_repository.dart';
 import '../../presentation/blocs/alerts/alert_bloc.dart';
 import '../../presentation/blocs/weather/weather_bloc.dart';
 import '../../presentation/blocs/settings/settings_bloc.dart';
+import '../notifications/local_notification_service.dart';
 
 final getIt = GetIt.instance;
 
@@ -48,13 +49,22 @@ Future<void> initDependencies() async {
     ),
   );
 
+  getIt.registerSingleton<LocalNotificationService>(
+    LocalNotificationService(hiveService: getIt<HiveService>()),
+  );
+
   getIt.registerFactory<WeatherBloc>(
     () => WeatherBloc(weatherRepository: getIt<WeatherRepository>()),
   );
 
   getIt.registerFactory<AlertBloc>(
-    () => AlertBloc(repository: getIt<AlertRepository>()),
+    () => AlertBloc(
+      repository: getIt<AlertRepository>(),
+      notificationService: getIt<LocalNotificationService>(),
+    ),
   );
+
+  await getIt<LocalNotificationService>().init();
 
   getIt.registerSingleton<SettingsBloc>(
     SettingsBloc(settingsRepository: getIt<SettingsRepository>()),

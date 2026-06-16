@@ -2,16 +2,21 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
 import '../../../domain/entities/alert.dart';
 import '../../../domain/repositories/alert_repository.dart';
+import '../../../core/notifications/local_notification_service.dart';
 
 part 'alert_event.dart';
 part 'alert_state.dart';
 
 class AlertBloc extends Bloc<AlertEvent, AlertState> {
   final AlertRepository _repository;
+  final LocalNotificationService _notificationService;
 
-  AlertBloc({required AlertRepository repository})
-      : _repository = repository,
-        super(AlertInitial()) {
+  AlertBloc({
+    required AlertRepository repository,
+    required LocalNotificationService notificationService,
+  }) : _repository = repository,
+       _notificationService = notificationService,
+       super(AlertInitial()) {
     on<LoadAlerts>(_onLoad);
     on<RefreshAlerts>(_onRefresh);
   }
@@ -20,9 +25,13 @@ class AlertBloc extends Bloc<AlertEvent, AlertState> {
     emit(AlertLoading());
     try {
       final alerts = await _repository.getActiveAlerts();
+      final sortedAlerts = _sort(alerts);
+
+      await _notificationService.notifyIfNewSOSAlert(sortedAlerts);
+
       emit(
         AlertLoaded(
-          alerts: _sort(alerts),
+          alerts: sortedAlerts,
           lastFetched: _repository.lastFetched,
           isStaleCache: !_repository.hasFreshCache,
         ),
@@ -32,18 +41,19 @@ class AlertBloc extends Bloc<AlertEvent, AlertState> {
     }
   }
 
-  Future<void> _onRefresh(
-    RefreshAlerts event,
-    Emitter<AlertState> emit,
-  ) async {
+  Future<void> _onRefresh(RefreshAlerts event, Emitter<AlertState> emit) async {
     // Keep showing the previous list while refreshing; never blank
     // the UI just because the network was slow.
     try {
       await _repository.refresh();
       final alerts = await _repository.getActiveAlerts();
+      final sortedAlerts = _sort(alerts);
+
+      await _notificationService.notifyIfNewSOSAlert(sortedAlerts);
+
       emit(
         AlertLoaded(
-          alerts: _sort(alerts),
+          alerts: sortedAlerts,
           lastFetched: _repository.lastFetched,
           isStaleCache: !_repository.hasFreshCache,
         ),
