@@ -223,7 +223,7 @@ class MenuScreen extends StatelessWidget {
             ),
           ),
         ),
-        _buildMenuItem(context, l10n.t('settings.notifications')),
+        _buildNotificationsToggle(context, state),
         _buildMenuItem(context, 'Widget Settings'),
       ],
     );
@@ -241,11 +241,6 @@ class MenuScreen extends StatelessWidget {
           trailing: '1.0.0',
           showChevron: false,
         ),
-        _buildMenuItem(context, 'News'),
-        _buildMenuItem(context, 'Remarks'),
-        _buildMenuItem(context, l10n.t('settings.termsOfService')),
-        _buildMenuItem(context, l10n.t('settings.privacyPolicy')),
-        _buildMenuItem(context, 'License Information'),
         _buildMenuItem(context, 'Contact Us'),
       ],
     );
@@ -323,6 +318,67 @@ class MenuScreen extends StatelessWidget {
     );
   }
 
+  Widget _buildNotificationsToggle(BuildContext context, SettingsState state) {
+    final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.06),
+            width: 0.5,
+          ),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.notifications_outlined,
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+            size: 22,
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  l10n.t('settings.notifications'),
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontSize: 15,
+                    color: theme.colorScheme.onSurface,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  state.notificationsEnabled ? 'On' : 'Off',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    fontSize: 12,
+                    color: state.notificationsEnabled
+                        ? theme.colorScheme.primary
+                        : theme.colorScheme.onSurface.withValues(alpha: 0.45),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Switch(
+            value: state.notificationsEnabled,
+            onChanged: (_) {
+              context
+                  .read<SettingsBloc>()
+                  .add(const ToggleNotifications());
+            },
+            activeThumbColor: theme.colorScheme.primary,
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildFooter(BuildContext context, AppLocalizations l10n) {
     final theme = Theme.of(context);
 
@@ -340,7 +396,7 @@ class MenuScreen extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               Text(
-                'ゲヒルン危機管理局',
+                'Theo DC_',
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
                   fontSize: 13,

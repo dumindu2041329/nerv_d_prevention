@@ -3,13 +3,13 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_map/flutter_map.dart';
-import 'package:go_router/go_router.dart';
 import 'package:latlong2/latlong.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/di/injection.dart';
 import '../../../core/constants/app_sl_constants.dart';
 import '../../../core/constants/weather_codes.dart';
 import '../../../core/utils/date_time_utils.dart';
+import '../../../data/remote/landslides/landslide_api_client.dart';
 import '../../../domain/entities/weather_data.dart';
 import '../../blocs/weather/weather_bloc.dart';
 import 'select_layer_sheet.dart';
@@ -32,11 +32,18 @@ class _MapScreenState extends State<MapScreen> {
   int _selectedSlotIndex = 0;
   double _dragAccumulator = 0;
   MapLayer _selectedLayer = MapLayer.rainRadar;
+  _HazardTab _hazardTab = _HazardTab.rain;
+  late String _hazardDisplayedTime;
+  List<_HazardPoint> _landslidePoints = const [];
+  bool _landslideLoading = false;
 
   @override
   void initState() {
     super.initState();
     _weatherBloc = getIt<WeatherBloc>()..add(const LoadWeather(useGps: true));
+    final now = DateTime.now();
+    _hazardDisplayedTime =
+        '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
   }
 
   @override
@@ -50,6 +57,34 @@ class _MapScreenState extends State<MapScreen> {
     _mapController.move(target, 12.0);
   }
 
+  Future<void> _fetchLandslides() async {
+    if (_landslideLoading) return;
+    setState(() => _landslideLoading = true);
+    final client = getIt<LandslideApiClient>();
+    final features = await client.getSriLankaLandslides();
+    if (!mounted) return;
+    setState(() {
+      _landslideLoading = false;
+      _landslidePoints = features.isNotEmpty
+          ? features
+              .map((f) => _HazardPoint(
+                    f.location,
+                    _severityFromString(f.severity),
+                  ))
+              .toList()
+          : const [];
+    });
+  }
+
+  String get _hazardTitle {
+    switch (_hazardTab) {
+      case _HazardTab.rain:
+        return 'Rainfall Analysis';
+      case _HazardTab.landslide:
+        return 'Landslide Risk Area';
+    }
+  }
+
   void _openLayerSheet() {
     showModalBottomSheet<void>(
       context: context,
@@ -61,17 +96,12 @@ class _MapScreenState extends State<MapScreen> {
         return SelectLayerSheet(
           initialLayer: _selectedLayer,
           onLayerChanged: (layer) {
-            if (layer == MapLayer.hazardMap) {
-              // The layer sheet pops itself; defer the push so we don't
-              // pop the underlying route while the sheet is dismissing.
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (!mounted) return;
-                GoRouter.of(context).push('/map/hazard');
-              });
-              return;
-            }
             if (_selectedLayer == layer) return;
             setState(() => _selectedLayer = layer);
+            // Load landslide risk areas the first time hazard map opens.
+            if (layer == MapLayer.hazardMap && _landslidePoints.isEmpty) {
+              _fetchLandslides();
+            }
             // Re-fetch weather so the chip and time scrubber reflect the
             // freshly-loaded data for the new layer.
             _weatherBloc.add(
@@ -193,6 +223,7 @@ class _MapScreenState extends State<MapScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return BlocProvider.value(
       value: _weatherBloc,
       child: BlocListener<WeatherBloc, WeatherState>(
@@ -216,7 +247,7 @@ class _MapScreenState extends State<MapScreen> {
           }
         },
         child: Scaffold(
-          backgroundColor: Colors.black,
+          backgroundColor: theme.scaffoldBackgroundColor,
           body: Stack(
             children: [
               // Full-screen map
@@ -244,12 +275,22 @@ class _MapScreenState extends State<MapScreen> {
                       userAgentPackageName: 'com.example.nerv_d_prevention',
                     ),
                     // Layer-specific overlay (reactive to selected layer)
-                    if (_selectedLayer.overlayUrl != null)
+                    if (_selectedLayer == MapLayer.hazardMap &&
+                        _hazardTab == _HazardTab.rain)
+                      TileLayer(
+                        urlTemplate: ApiConstants.owmPrecipitationOverlay,
+                        userAgentPackageName: 'com.example.nerv_d_prevention',
+                        tileDisplay: const TileDisplay.instantaneous(opacity: 0.85),
+                      )
+                    else if (_selectedLayer.overlayUrl != null)
                       TileLayer(
                         urlTemplate: _selectedLayer.overlayUrl!,
                         userAgentPackageName: 'com.example.nerv_d_prevention',
                         tileDisplay: const TileDisplay.instantaneous(opacity: 0.6),
                       ),
+                    // Hazard risk circles (only when hazard layer is active)
+                    if (_selectedLayer == MapLayer.hazardMap)
+                      _buildHazardRiskLayer(),
                     // Layer-specific markers/visualizations
                     _buildLayerMarkers(),
                     RichAttributionWidget(
@@ -262,7 +303,8 @@ class _MapScreenState extends State<MapScreen> {
                         TextSourceAttribution('© MapTiler', onTap: () => {}),
                       ],
                     ),
-                    _buildUserLocationMarker(),
+                    if (_selectedLayer != MapLayer.hazardMap)
+                      _buildUserLocationMarker(),
                   ],
                 ),
               ),
@@ -275,26 +317,30 @@ class _MapScreenState extends State<MapScreen> {
                 child: _buildTopOverlay(context),
               ),
 
-              // Weather chip (floating, top-left below title)
-              Positioned(
-                left: 16,
-                top: MediaQuery.of(context).padding.top + 80,
-                child: _buildWeatherChip(context),
-              ),
+              // Weather chip (floating, top-left below title) — hidden in hazard mode
+              if (_selectedLayer != MapLayer.hazardMap)
+                Positioned(
+                  left: 16,
+                  top: MediaQuery.of(context).padding.top + 80,
+                  child: _buildWeatherChip(context),
+                ),
 
-              // My Location button
-              Positioned(
-                right: 16,
-                top: MediaQuery.of(context).padding.top + 80,
-                child: _buildMapButton(Icons.my_location, _zoomToMyLocation),
-              ),
+              // My Location button — hidden in hazard mode
+              if (_selectedLayer != MapLayer.hazardMap)
+                Positioned(
+                  right: 16,
+                  top: MediaQuery.of(context).padding.top + 80,
+                  child: _buildMapButton(Icons.my_location, _zoomToMyLocation),
+                ),
 
-              // Bottom: Time Scrubber
+              // Bottom: Time Scrubber (or Hazard sub-tabs in hazard mode)
               Positioned(
                 left: 0,
                 right: 0,
                 bottom: 0,
-                child: _buildTimeScrubber(context),
+                child: _selectedLayer == MapLayer.hazardMap
+                    ? _buildHazardBottomBar(context)
+                    : _buildTimeScrubber(context),
               ),
             ],
           ),
@@ -307,6 +353,7 @@ class _MapScreenState extends State<MapScreen> {
 
   Widget _buildUserLocationMarker() {
     if (_gpsLocation == null) return const SizedBox.shrink();
+    final primary = Theme.of(context).colorScheme.primary;
     return MarkerLayer(
       markers: [
         Marker(
@@ -322,9 +369,9 @@ class _MapScreenState extends State<MapScreen> {
                 height: 36,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: const Color(0xFF00BCD4).withValues(alpha: 0.12),
+                  color: primary.withValues(alpha: 0.12),
                   border: Border.all(
-                    color: const Color(0xFF00BCD4).withValues(alpha: 0.3),
+                    color: primary.withValues(alpha: 0.3),
                     width: 1.5,
                   ),
                 ),
@@ -335,14 +382,14 @@ class _MapScreenState extends State<MapScreen> {
                 height: 12,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: const Color(0xFF00BCD4),
+                  color: primary,
                   border: Border.all(
                     color: Colors.white.withValues(alpha: 0.9),
                     width: 2,
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: const Color(0xFF00BCD4).withValues(alpha: 0.5),
+                      color: primary.withValues(alpha: 0.5),
                       blurRadius: 6,
                       spreadRadius: 1,
                     ),
@@ -505,6 +552,14 @@ class _MapScreenState extends State<MapScreen> {
   // ── Weather Chip ────────────────────────────────────────────────────
 
   Widget _buildWeatherChip(BuildContext context) {
+    final theme = Theme.of(context);
+    final chipBg = theme.brightness == Brightness.dark
+        ? const Color(0xFF1A1E29).withValues(alpha: 0.92)
+        : Colors.white.withValues(alpha: 0.96);
+    final chipBorder = theme.brightness == Brightness.dark
+        ? Colors.white.withValues(alpha: 0.1)
+        : Colors.black.withValues(alpha: 0.08);
+    final primaryText = theme.colorScheme.onSurface;
     return BlocBuilder<WeatherBloc, WeatherState>(
       builder: (context, state) {
         if (state is WeatherLoaded) {
@@ -512,21 +567,21 @@ class _MapScreenState extends State<MapScreen> {
           final selectedIndex = _clampIndex(_selectedSlotIndex, slots.length);
           final selected = slots.isNotEmpty ? slots[selectedIndex] : null;
 
-          final weatherCode = selected?.weatherCode ?? state.weatherData.current.weatherCode;
-          final temp = selected?.temperature ?? state.weatherData.current.temperature;
+          final weatherCode =
+              selected?.weatherCode ?? state.weatherData.current.weatherCode;
+          final temp =
+              selected?.temperature ?? state.weatherData.current.temperature;
           final time = selected?.time ?? state.weatherData.current.time;
-          final emoji = WeatherCodeMapping.getIcon(weatherCode, isDay: _isDay(time));
+          final emoji =
+              WeatherCodeMapping.getIcon(weatherCode, isDay: _isDay(time));
           final locationName = state.location?.name ?? 'Current Location';
 
           return Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
-              color: const Color(0xFF1A1E29).withValues(alpha: 0.92),
+              color: chipBg,
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                color: Colors.white.withValues(alpha: 0.1),
-                width: 1,
-              ),
+              border: Border.all(color: chipBorder, width: 1),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -539,8 +594,8 @@ class _MapScreenState extends State<MapScreen> {
                   children: [
                     Text(
                       '${temp.toStringAsFixed(0)}°C',
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: primaryText,
                         fontSize: 18,
                         fontWeight: FontWeight.w700,
                       ),
@@ -548,7 +603,7 @@ class _MapScreenState extends State<MapScreen> {
                     Text(
                       '$locationName · ${DateTimeUtils.formatTime(time)}',
                       style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.5),
+                        color: primaryText.withValues(alpha: 0.6),
                         fontSize: 10,
                       ),
                     ),
@@ -566,20 +621,28 @@ class _MapScreenState extends State<MapScreen> {
   // ── Map Controls ────────────────────────────────────────────────────
 
   Widget _buildMapButton(IconData icon, VoidCallback onPressed) {
+    final theme = Theme.of(context);
+    final bg = theme.brightness == Brightness.dark
+        ? const Color(0xFF1A1E29)
+        : Colors.white.withValues(alpha: 0.96);
+    final border = theme.brightness == Brightness.dark
+        ? Colors.white.withValues(alpha: 0.1)
+        : Colors.black.withValues(alpha: 0.08);
     return GestureDetector(
       onTap: onPressed,
       child: Container(
         width: 48,
         height: 48,
         decoration: BoxDecoration(
-          color: const Color(0xFF1A1E29),
+          color: bg,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: Colors.white.withValues(alpha: 0.1),
-            width: 1,
-          ),
+          border: Border.all(color: border, width: 1),
         ),
-        child: Icon(icon, color: Colors.white.withValues(alpha: 0.8), size: 24),
+        child: Icon(
+          icon,
+          color: theme.colorScheme.onSurface.withValues(alpha: 0.85),
+          size: 24,
+        ),
       ),
     );
   }
@@ -587,36 +650,100 @@ class _MapScreenState extends State<MapScreen> {
   // ── Top Overlay ─────────────────────────────────────────────────────
 
   Widget _buildTopOverlay(BuildContext context) {
+    final isHazard = _selectedLayer == MapLayer.hazardMap;
+    final onSurface = Theme.of(context).colorScheme.onSurface;
+    final overlayBg = Theme.of(context).brightness == Brightness.dark
+        ? [
+            Colors.black.withValues(alpha: 0.92),
+            Colors.black.withValues(alpha: 0.7),
+            Colors.transparent,
+          ]
+        : [
+            Colors.white.withValues(alpha: 0.92),
+            Colors.white.withValues(alpha: 0.6),
+            Colors.transparent,
+          ];
     return Container(
       padding: EdgeInsets.only(
         top: MediaQuery.of(context).padding.top + 8,
-        bottom: 8,
+        bottom: 12,
       ),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [
-            Colors.black.withValues(alpha: 0.9),
-            Colors.black.withValues(alpha: 0.7),
-            Colors.transparent,
-          ],
+          colors: overlayBg,
         ),
       ),
       child: Column(
         children: [
           Text(
-            _selectedLayer.mapTitle,
-            style: const TextStyle(
-              color: Colors.white,
+            isHazard ? _hazardTitle : _selectedLayer.mapTitle,
+            style: TextStyle(
+              color: onSurface,
               fontSize: 18,
               fontWeight: FontWeight.w700,
+              letterSpacing: 0.5,
             ),
           ),
-          if (_selectedLayer == MapLayer.rainRadar) ...[
-            const SizedBox(height: 10),
+          const SizedBox(height: 10),
+          if (isHazard && _hazardTab == _HazardTab.rain)
+            _buildHazardRainfallScale()
+          else if (_selectedLayer == MapLayer.rainRadar)
             _buildColorLegend(),
-          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHazardRainfallScale() {
+    final onSurface = Theme.of(context).colorScheme.onSurface;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Column(
+        children: [
+          Container(
+            height: 12,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(2),
+              gradient: const LinearGradient(
+                colors: [
+                  Color(0xFF80D8FF),
+                  Color(0xFF448AFF),
+                  Color(0xFF2962FF),
+                  Color(0xFF1A237E),
+                  Color(0xFFFFEB3B),
+                  Color(0xFFFF9800),
+                  Color(0xFFFF5722),
+                  Color(0xFFF44336),
+                  Color(0xFFE91E63),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              for (final v in const ['1', '5', '10', '20', '30', '50', '80'])
+                Text(
+                  v,
+                  style: TextStyle(
+                    color: onSurface.withValues(alpha: 0.8),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              Text(
+                '(mm/h)',
+                style: TextStyle(
+                  color: onSurface.withValues(alpha: 0.6),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w400,
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );
@@ -669,9 +796,150 @@ class _MapScreenState extends State<MapScreen> {
     return Text(
       text,
       style: TextStyle(
-        color: Colors.white.withValues(alpha: 0.7),
+        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.75),
         fontSize: 11,
         fontWeight: FontWeight.w500,
+      ),
+    );
+  }
+
+  // ── Hazard Map UI ───────────────────────────────────────────────────
+
+  Widget _buildHazardRiskLayer() {
+    if (_hazardTab != _HazardTab.landslide) return const SizedBox.shrink();
+    if (_landslidePoints.isEmpty) return const SizedBox.shrink();
+    return CircleLayer(
+      circles: _landslidePoints.map((p) {
+        return CircleMarker(
+          point: p.location,
+          radius: 7,
+          useRadiusInMeter: false,
+          color: p.severity.color.withValues(alpha: 0.9),
+          borderColor: p.severity.color,
+          borderStrokeWidth: 1.5,
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildHazardBottomBar(BuildContext context) {
+    final bottomPadding = MediaQuery.of(context).padding.bottom;
+    final theme = Theme.of(context);
+    final primary = theme.colorScheme.primary;
+    final isDark = theme.brightness == Brightness.dark;
+    final barBg = isDark
+        ? Colors.black.withValues(alpha: 0.92)
+        : Colors.white.withValues(alpha: 0.94);
+    final barBorder = isDark
+        ? Colors.white.withValues(alpha: 0.08)
+        : Colors.black.withValues(alpha: 0.08);
+    final pillIdleBg = isDark
+        ? Colors.white.withValues(alpha: 0.04)
+        : Colors.black.withValues(alpha: 0.04);
+    return Container(
+      padding: EdgeInsets.only(
+        left: 12,
+        right: 12,
+        top: 12,
+        bottom: bottomPadding + 12,
+      ),
+      decoration: BoxDecoration(
+        color: barBg,
+        border: Border(top: BorderSide(color: barBorder, width: 0.5)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          // Time display (bottom-left)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: pillIdleBg,
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: barBorder, width: 0.5),
+            ),
+            child: Text(
+              _hazardDisplayedTime,
+              style: TextStyle(
+                color: primary,
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          // Sub-tab pills
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  _hazardSubTab(_HazardTab.rain, 'Rain'),
+                  _hazardSubTab(_HazardTab.landslide, 'Landslide'),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 6),
+          // Layers button — opens the layer sheet so the user can switch back
+          InkResponse(
+            onTap: _openLayerSheet,
+            radius: 24,
+            child: Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: primary.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: primary.withValues(alpha: 0.45),
+                  width: 1,
+                ),
+              ),
+              child: Icon(Icons.layers, color: primary, size: 22),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _hazardSubTab(_HazardTab tab, String label) {
+    final selected = _hazardTab == tab;
+    final theme = Theme.of(context);
+    final primary = theme.colorScheme.primary;
+    final isDark = theme.brightness == Brightness.dark;
+    final idleBg = isDark
+        ? Colors.white.withValues(alpha: 0.04)
+        : Colors.black.withValues(alpha: 0.04);
+    final idleBorder = isDark
+        ? Colors.white.withValues(alpha: 0.18)
+        : Colors.black.withValues(alpha: 0.18);
+    final idleText = isDark ? Colors.white : theme.colorScheme.onSurface;
+    return Padding(
+      padding: const EdgeInsets.only(right: 6),
+      child: GestureDetector(
+        onTap: () => setState(() => _hazardTab = tab),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            color: selected ? primary.withValues(alpha: 0.18) : idleBg,
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(
+              color: selected ? primary : idleBorder,
+              width: 1,
+            ),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              color: selected ? primary : idleText,
+              fontSize: 13,
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -680,6 +948,9 @@ class _MapScreenState extends State<MapScreen> {
     return BlocBuilder<WeatherBloc, WeatherState>(
       builder: (context, state) {
         final bottomPadding = MediaQuery.of(context).padding.bottom;
+        final theme = Theme.of(context);
+        final primary = theme.colorScheme.primary;
+        final isDark = theme.brightness == Brightness.dark;
         final slots = state is WeatherLoaded
             ? _buildFiveMinSlots(state.weatherData.hourly)
             : const <_FiveMinSlot>[];
@@ -690,6 +961,12 @@ class _MapScreenState extends State<MapScreen> {
         final localSelectedTime = selectedTime.toLocal();
         final isNow =
             selectedTime.difference(DateTime.now()).abs().inMinutes <= 30;
+        final barBg = isDark
+            ? Colors.black.withValues(alpha: 0.92)
+            : Colors.white.withValues(alpha: 0.94);
+        final barBorder = isDark
+            ? Colors.white.withValues(alpha: 0.08)
+            : Colors.black.withValues(alpha: 0.08);
 
         return Container(
           padding: EdgeInsets.only(
@@ -699,12 +976,9 @@ class _MapScreenState extends State<MapScreen> {
             bottom: bottomPadding + 16,
           ),
           decoration: BoxDecoration(
-            color: Colors.black.withValues(alpha: 0.92),
+            color: barBg,
             border: Border(
-              top: BorderSide(
-                color: Colors.white.withValues(alpha: 0.08),
-                width: 0.5,
-              ),
+              top: BorderSide(color: barBorder, width: 0.5),
             ),
           ),
           child: Column(
@@ -714,9 +988,11 @@ class _MapScreenState extends State<MapScreen> {
                 children: [
                   const SizedBox(width: 60),
                   Text(
-                    isNow ? 'Now · Local' : '${DateTimeUtils.formatDate(localSelectedTime)} · Local',
-                    style: const TextStyle(
-                      color: Color(0xFF00BCD4),
+                    isNow
+                        ? 'Now · Local'
+                        : '${DateTimeUtils.formatDate(localSelectedTime)} · Local',
+                    style: TextStyle(
+                      color: primary,
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
                     ),
@@ -724,8 +1000,8 @@ class _MapScreenState extends State<MapScreen> {
                   const SizedBox(width: 16),
                   Text(
                     DateTimeUtils.formatTime(localSelectedTime),
-                    style: const TextStyle(
-                      color: Color(0xFF00BCD4),
+                    style: TextStyle(
+                      color: primary,
                       fontSize: 36,
                       fontWeight: FontWeight.w300,
                       letterSpacing: 2,
@@ -735,11 +1011,11 @@ class _MapScreenState extends State<MapScreen> {
                   InkResponse(
                     onTap: _openLayerSheet,
                     radius: 24,
-                    child: const Padding(
-                      padding: EdgeInsets.all(4),
+                    child: Padding(
+                      padding: const EdgeInsets.all(4),
                       child: Icon(
                         Icons.layers,
-                        color: Color(0xFF00BCD4),
+                        color: primary,
                         size: 28,
                       ),
                     ),
@@ -751,10 +1027,10 @@ class _MapScreenState extends State<MapScreen> {
                 SliderTheme(
                   data: SliderTheme.of(context).copyWith(
                     trackHeight: 2,
-                    activeTrackColor: const Color(0xFF00BCD4),
-                    inactiveTrackColor: Colors.white.withValues(alpha: 0.22),
-                    thumbColor: const Color(0xFF00BCD4),
-                    overlayColor: const Color(0xFF00BCD4).withValues(alpha: 0.18),
+                    activeTrackColor: primary,
+                    inactiveTrackColor: primary.withValues(alpha: 0.22),
+                    thumbColor: primary,
+                    overlayColor: primary.withValues(alpha: 0.18),
                     thumbShape: const _ScrubberThumbShape(),
                   ),
                   child: Slider(
@@ -771,15 +1047,15 @@ class _MapScreenState extends State<MapScreen> {
                 Container(
                   height: 24,
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.04),
+                    color: primary.withValues(alpha: 0.04),
                     borderRadius: BorderRadius.circular(4),
                   ),
                 ),
               const SizedBox(height: 8),
               if (slots.isNotEmpty)
-                _buildSlotTicks(slots, selectedIndex)
+                _buildSlotTicks(context, slots, selectedIndex)
               else
-                _buildTimeTicksSkeleton(),
+                _buildTimeTicksSkeleton(context),
             ],
           ),
         );
@@ -787,7 +1063,10 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
-  Widget _buildTimeTicksSkeleton() {
+  Widget _buildTimeTicksSkeleton(BuildContext context) {
+    final theme = Theme.of(context);
+    final tickColor = theme.colorScheme.onSurface.withValues(alpha: 0.18);
+    final labelColor = theme.colorScheme.onSurface.withValues(alpha: 0.3);
     return SizedBox(
       height: 36,
       child: Row(
@@ -800,10 +1079,7 @@ class _MapScreenState extends State<MapScreen> {
                 if (showLabel)
                   Text(
                     '--:--',
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.25),
-                      fontSize: 10,
-                    ),
+                    style: TextStyle(color: labelColor, fontSize: 10),
                   )
                 else
                   const SizedBox(height: 12),
@@ -812,7 +1088,7 @@ class _MapScreenState extends State<MapScreen> {
                   width: 2,
                   height: 14,
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.16),
+                    color: tickColor,
                     borderRadius: BorderRadius.circular(1),
                   ),
                 ),
@@ -824,9 +1100,13 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
-  Widget _buildSlotTicks(List<_FiveMinSlot> slots, int selectedIndex) {
+  Widget _buildSlotTicks(
+    BuildContext context,
+    List<_FiveMinSlot> slots,
+    int selectedIndex,
+  ) {
     final count = slots.length;
-    if (count == 0) return _buildTimeTicksSkeleton();
+    if (count == 0) return _buildTimeTicksSkeleton(context);
 
     final windowSize = count < 25 ? count : 25;
     final half = windowSize ~/ 2;
@@ -841,6 +1121,11 @@ class _MapScreenState extends State<MapScreen> {
     void setIndex(int index) {
       setState(() => _selectedSlotIndex = index.clamp(0, count - 1));
     }
+
+    final theme = Theme.of(context);
+    final primary = theme.colorScheme.primary;
+    final labelColor = theme.colorScheme.onSurface.withValues(alpha: 0.55);
+    final tickIdle = theme.colorScheme.onSurface.withValues(alpha: 0.3);
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -878,7 +1163,7 @@ class _MapScreenState extends State<MapScreen> {
                           Text(
                             DateTimeUtils.formatTime(slots[i].time.toLocal()),
                             style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.4),
+                              color: labelColor,
                               fontSize: 10,
                             ),
                           )
@@ -889,10 +1174,7 @@ class _MapScreenState extends State<MapScreen> {
                           width: i == selectedIndex ? 4 : 2,
                           height: i == selectedIndex ? 18 : 14,
                           decoration: BoxDecoration(
-                            color:
-                                i == selectedIndex
-                                    ? const Color(0xFF00BCD4)
-                                    : Colors.white.withValues(alpha: 0.3),
+                            color: i == selectedIndex ? primary : tickIdle,
                             borderRadius: BorderRadius.circular(1),
                           ),
                         ),
@@ -914,6 +1196,47 @@ class _MapScreenState extends State<MapScreen> {
 
   bool _isDay(DateTime time) => time.hour >= 6 && time.hour < 18;
 }
+
+enum _HazardTab { rain, landslide }
+
+enum _Severity { advisory, caution, danger, emergency }
+
+extension on _Severity {
+  Color get color {
+    switch (this) {
+      case _Severity.advisory:
+        return const Color(0xFFFFC400);
+      case _Severity.caution:
+        return const Color(0xFFFF1744);
+      case _Severity.danger:
+        return const Color(0xFFE91E63);
+      case _Severity.emergency:
+        return const Color(0xFFAA00FF);
+    }
+  }
+}
+
+class _HazardPoint {
+  final LatLng location;
+  final _Severity severity;
+  const _HazardPoint(this.location, this.severity);
+}
+
+_Severity _severityFromString(String s) {
+  switch (s) {
+    case 'caution':
+      return _Severity.caution;
+    case 'danger':
+      return _Severity.danger;
+    case 'emergency':
+      return _Severity.emergency;
+    case 'advisory':
+    default:
+      return _Severity.advisory;
+  }
+}
+
+
 
 class _FiveMinSlot {
   final DateTime time;
@@ -985,16 +1308,24 @@ class _WeatherPin extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final pinBg = isDark
+        ? const Color(0xFF0B0B0B).withValues(alpha: 0.92)
+        : Colors.white.withValues(alpha: 0.96);
+    final pinSecondary = isDark
+        ? Colors.white.withValues(alpha: 0.7)
+        : Colors.black.withValues(alpha: 0.7);
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           decoration: BoxDecoration(
-            color: const Color(0xFF0B0B0B).withValues(alpha: 0.92),
+            color: pinBg,
             borderRadius: BorderRadius.circular(8),
             border: Border.all(
-              color: color.withValues(alpha: 0.5),
+              color: color.withValues(alpha: 0.55),
               width: 1,
             ),
           ),
@@ -1018,7 +1349,7 @@ class _WeatherPin extends StatelessWidget {
                   Text(
                     secondary,
                     style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.7),
+                      color: pinSecondary,
                       fontSize: 9,
                     ),
                   ),

@@ -54,7 +54,10 @@ Future<void> initDependencies() async {
   );
 
   getIt.registerFactory<WeatherBloc>(
-    () => WeatherBloc(weatherRepository: getIt<WeatherRepository>()),
+    () => WeatherBloc(
+      weatherRepository: getIt<WeatherRepository>(),
+      notificationService: getIt<LocalNotificationService>(),
+    ),
   );
 
   getIt.registerFactory<AlertBloc>(
@@ -67,6 +70,9 @@ Future<void> initDependencies() async {
   await getIt<LocalNotificationService>().init();
 
   getIt.registerSingleton<SettingsBloc>(
-    SettingsBloc(settingsRepository: getIt<SettingsRepository>()),
+    SettingsBloc(
+      settingsRepository: getIt<SettingsRepository>(),
+      notificationService: getIt<LocalNotificationService>(),
+    ),
   );
 }

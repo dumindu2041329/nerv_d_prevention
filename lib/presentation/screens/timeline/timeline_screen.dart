@@ -65,7 +65,7 @@ class _TimelineScreenState extends State<TimelineScreen> {
     return BlocProvider.value(
       value: _weatherBloc,
       child: Scaffold(
-        backgroundColor: Colors.black,
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         body: SafeArea(
           child: Column(
             children: [
@@ -107,17 +107,20 @@ class _TimelineScreenState extends State<TimelineScreen> {
               final l10n = AppLocalizations.of(context);
 
               if (state is WeatherLoading) {
-                return const Center(
-                  child: CircularProgressIndicator(color: Color(0xFF00BCD4)),
+                return Center(
+                  child: CircularProgressIndicator(
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
                 );
               }
 
               if (state is WeatherError) {
+                final theme = Theme.of(context);
                 return Center(
                   child: Text(
                     state.message,
                     style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.5),
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
                       fontSize: 16,
                     ),
                   ),
@@ -134,11 +137,13 @@ class _TimelineScreenState extends State<TimelineScreen> {
                 return _buildTimelineList(context, events);
               }
 
+              final themePlaceholder = Theme.of(context);
               return Center(
                 child: Text(
                   l10n.t('timeline.loading'),
                   style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.4),
+                    color: themePlaceholder.colorScheme.onSurface
+                        .withValues(alpha: 0.5),
                     fontSize: 14,
                   ),
                 ),
@@ -152,6 +157,8 @@ class _TimelineScreenState extends State<TimelineScreen> {
 
   Widget _buildTimelineList(BuildContext context, List<TimelineEvent> events) {
     final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    final onSurface = theme.colorScheme.onSurface;
     final grouped = _groupEventsByDate(events, l10n);
 
     if (grouped.isEmpty) {
@@ -161,14 +168,14 @@ class _TimelineScreenState extends State<TimelineScreen> {
           children: [
             Icon(
               Icons.check_circle_outline,
-              color: Colors.white.withValues(alpha: 0.3),
+              color: onSurface.withValues(alpha: 0.35),
               size: 48,
             ),
             const SizedBox(height: 12),
             Text(
               l10n.t('timeline.noActiveAlerts'),
               style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.5),
+                color: onSurface.withValues(alpha: 0.65),
                 fontSize: 16,
               ),
             ),
@@ -176,7 +183,7 @@ class _TimelineScreenState extends State<TimelineScreen> {
             Text(
               l10n.t('timeline.conditionsCalm'),
               style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.3),
+                color: onSurface.withValues(alpha: 0.45),
                 fontSize: 13,
               ),
             ),
@@ -205,7 +212,7 @@ class _TimelineScreenState extends State<TimelineScreen> {
     return Column(
       children: [
         // Date separator pill
-        _buildDateSeparator(group.label),
+        _buildDateSeparator(context, group.label),
         // Events in this group
         ...group.events.asMap().entries.map((entry) {
           final isFirst = entry.key == 0 && groupIndex == 0;
@@ -218,20 +225,28 @@ class _TimelineScreenState extends State<TimelineScreen> {
     );
   }
 
-  Widget _buildDateSeparator(String label) {
+  Widget _buildDateSeparator(BuildContext context, String label) {
+    final theme = Theme.of(context);
+    final onSurface = theme.colorScheme.onSurface;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 12),
       child: Center(
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
           decoration: BoxDecoration(
-            color: const Color(0xFF2A2A2A),
+            color: theme.colorScheme.surfaceContainerHighest
+                .withValues(alpha: 0.85),
             borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: theme.dividerTheme.color ??
+                  onSurface.withValues(alpha: 0.1),
+              width: 0.5,
+            ),
           ),
           child: Text(
             label,
-            style: const TextStyle(
-              color: Colors.white,
+            style: TextStyle(
+              color: onSurface,
               fontSize: 13,
               fontWeight: FontWeight.w500,
             ),
@@ -248,13 +263,19 @@ class _TimelineScreenState extends State<TimelineScreen> {
     bool isLast,
   ) {
     final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    final onSurface = theme.colorScheme.onSurface;
     final isHighlighted = isFirst;
     final color = event.severity.color;
     final isLifted = event.isLifted;
+    final highlightedBg = theme.brightness == Brightness.dark
+        ? const Color(0xFF1A1A1A)
+        : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.7);
+    final lineColor = onSurface.withValues(alpha: 0.18);
 
     return IntrinsicHeight(
       child: Container(
-        color: isHighlighted ? const Color(0xFF1A1A1A) : Colors.transparent,
+        color: isHighlighted ? highlightedBg : Colors.transparent,
         padding: const EdgeInsets.symmetric(horizontal: 16),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -267,7 +288,7 @@ class _TimelineScreenState extends State<TimelineScreen> {
                 child: Text(
                   DateTimeUtils.formatTime(event.time),
                   style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.6),
+                    color: onSurface.withValues(alpha: 0.65),
                     fontSize: 14,
                     fontWeight: FontWeight.w500,
                   ),
@@ -284,9 +305,7 @@ class _TimelineScreenState extends State<TimelineScreen> {
                   Container(
                     width: 1.5,
                     height: 16,
-                    color: isFirst
-                        ? Colors.transparent
-                        : Colors.white.withValues(alpha: 0.15),
+                    color: isFirst ? Colors.transparent : lineColor,
                   ),
                   // Circle dot with severity color
                   Container(
@@ -295,12 +314,12 @@ class _TimelineScreenState extends State<TimelineScreen> {
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: isLifted
-                          ? Colors.black
-                          : color.withValues(alpha: 0.1),
+                          ? theme.scaffoldBackgroundColor
+                          : color.withValues(alpha: 0.12),
                       border: Border.all(
                         color: isLifted
-                            ? Colors.white.withValues(alpha: 0.25)
-                            : color.withValues(alpha: 0.5),
+                            ? onSurface.withValues(alpha: 0.3)
+                            : color.withValues(alpha: 0.55),
                         width: 1.5,
                       ),
                     ),
@@ -309,8 +328,8 @@ class _TimelineScreenState extends State<TimelineScreen> {
                         _getEventIcon(event.type),
                         size: 16,
                         color: isLifted
-                            ? Colors.white.withValues(alpha: 0.4)
-                            : color.withValues(alpha: 0.8),
+                            ? onSurface.withValues(alpha: 0.45)
+                            : color.withValues(alpha: 0.85),
                       ),
                     ),
                   ),
@@ -318,9 +337,7 @@ class _TimelineScreenState extends State<TimelineScreen> {
                   Expanded(
                     child: Container(
                       width: 1.5,
-                      color: isLast
-                          ? Colors.transparent
-                          : Colors.white.withValues(alpha: 0.15),
+                      color: isLast ? Colors.transparent : lineColor,
                     ),
                   ),
                 ],
@@ -346,7 +363,7 @@ class _TimelineScreenState extends State<TimelineScreen> {
                                   _getEventTypeLabel(event.type, l10n),
                                   style: TextStyle(
                                     color: isLifted
-                                        ? Colors.white.withValues(alpha: 0.5)
+                                        ? onSurface.withValues(alpha: 0.55)
                                         : color,
                                     fontSize: 16,
                                     fontWeight: FontWeight.w700,
@@ -360,17 +377,15 @@ class _TimelineScreenState extends State<TimelineScreen> {
                                       vertical: 2,
                                     ),
                                     decoration: BoxDecoration(
-                                      color: Colors.white.withValues(
-                                        alpha: 0.1,
-                                      ),
+                                      color: onSurface.withValues(alpha: 0.1),
                                       borderRadius: BorderRadius.circular(4),
                                     ),
                                     child: Text(
                                       AppLocalizations.of(
                                         context,
                                       ).t('timeline.info'),
-                                      style: const TextStyle(
-                                        color: Colors.white54,
+                                      style: TextStyle(
+                                        color: onSurface.withValues(alpha: 0.6),
                                         fontSize: 10,
                                         fontWeight: FontWeight.w600,
                                       ),
@@ -384,8 +399,8 @@ class _TimelineScreenState extends State<TimelineScreen> {
                               event.title,
                               style: TextStyle(
                                 color: isLifted
-                                    ? Colors.white.withValues(alpha: 0.3)
-                                    : Colors.white.withValues(alpha: 0.6),
+                                    ? onSurface.withValues(alpha: 0.35)
+                                    : onSurface.withValues(alpha: 0.65),
                                 fontSize: 14,
                               ),
                               maxLines: 1,
@@ -396,7 +411,7 @@ class _TimelineScreenState extends State<TimelineScreen> {
                       ),
                       Icon(
                         Icons.chevron_right,
-                        color: Colors.white.withValues(alpha: 0.3),
+                        color: onSurface.withValues(alpha: 0.35),
                         size: 22,
                       ),
                     ],

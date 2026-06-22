@@ -50,10 +50,12 @@ class _SosAlertBannerState extends State<SosAlertBanner>
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final color = widget.alert.severity.color;
     final isCritical = widget.alert.severity == SeverityLevel.critical;
     final iconOpacity =
         isCritical ? _pulseAnim : const AlwaysStoppedAnimation<double>(1.0);
+    final onSurface = theme.colorScheme.onSurface;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -145,7 +147,7 @@ class _SosAlertBannerState extends State<SosAlertBanner>
                                 Text(
                                   _formatTime(widget.alert.issuedTime),
                                   style: TextStyle(
-                                    color: Colors.white.withValues(alpha: 0.6),
+                                    color: onSurface.withValues(alpha: 0.6),
                                     fontSize: 11,
                                   ),
                                 ),
@@ -154,8 +156,8 @@ class _SosAlertBannerState extends State<SosAlertBanner>
                             const SizedBox(height: 4),
                             Text(
                               widget.alert.headline,
-                              style: const TextStyle(
-                                color: Colors.white,
+                              style: TextStyle(
+                                color: onSurface,
                                 fontSize: 15,
                                 fontWeight: FontWeight.w700,
                               ),
@@ -172,7 +174,7 @@ class _SosAlertBannerState extends State<SosAlertBanner>
                     Text(
                       widget.alert.description,
                       style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.85),
+                        color: onSurface.withValues(alpha: 0.85),
                         fontSize: 13,
                         height: 1.4,
                       ),
@@ -187,14 +189,14 @@ class _SosAlertBannerState extends State<SosAlertBanner>
                         Icon(
                           Icons.place_outlined,
                           size: 12,
-                          color: Colors.white.withValues(alpha: 0.5),
+                          color: onSurface.withValues(alpha: 0.55),
                         ),
                         const SizedBox(width: 4),
                         Expanded(
                           child: Text(
                             widget.alert.location,
                             style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.6),
+                              color: onSurface.withValues(alpha: 0.7),
                               fontSize: 11,
                             ),
                             maxLines: 1,

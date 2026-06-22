@@ -86,21 +86,32 @@ class _SelectLayerSheetState extends State<SelectLayerSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final onSurface = theme.colorScheme.onSurface;
     return SafeArea(
       top: false,
       child: Container(
-        decoration: const BoxDecoration(
-          color: Color(0xFF0B0B0B),
-          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+          boxShadow: theme.brightness == Brightness.light
+              ? [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.08),
+                    blurRadius: 16,
+                    offset: const Offset(0, -2),
+                  ),
+                ]
+              : null,
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             _buildHeader(context),
-            const Divider(
+            Divider(
               height: 1,
               thickness: 0.5,
-              color: Color(0x1FFFFFFF),
+              color: onSurface.withValues(alpha: 0.12),
             ),
             Flexible(
               child: ListView.separated(
@@ -129,14 +140,15 @@ class _SelectLayerSheetState extends State<SelectLayerSheet> {
   }
 
   Widget _buildHeader(BuildContext context) {
+    final onSurface = Theme.of(context).colorScheme.onSurface;
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 14, 12, 14),
       child: Row(
         children: [
-          const Text(
+          Text(
             'Select Layer',
             style: TextStyle(
-              color: Colors.white,
+              color: onSurface,
               fontSize: 18,
               fontWeight: FontWeight.w700,
             ),
@@ -148,7 +160,7 @@ class _SelectLayerSheetState extends State<SelectLayerSheet> {
             },
             icon: Icon(
               Icons.settings_outlined,
-              color: Colors.white.withValues(alpha: 0.85),
+              color: onSurface.withValues(alpha: 0.8),
               size: 22,
             ),
             splashRadius: 22,
@@ -159,7 +171,7 @@ class _SelectLayerSheetState extends State<SelectLayerSheet> {
             },
             icon: Icon(
               Icons.close,
-              color: Colors.white.withValues(alpha: 0.85),
+              color: onSurface.withValues(alpha: 0.8),
               size: 24,
             ),
             splashRadius: 22,
@@ -243,9 +255,10 @@ class _LayerTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final color = selected
-        ? const Color(0xFF00BCD4)
-        : Colors.white.withValues(alpha: 0.85);
+        ? theme.colorScheme.primary
+        : theme.colorScheme.onSurface.withValues(alpha: 0.85);
 
     return InkWell(
       onTap: onTap,

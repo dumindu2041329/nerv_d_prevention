@@ -7,6 +7,7 @@ class SettingsState extends Equatable {
   final ContrastMode contrastMode;
   final TextSizeScale textSizeScale;
   final FontWeightScale fontWeightScale;
+  final bool notificationsEnabled;
   final bool isLoaded;
 
   const SettingsState({
@@ -16,6 +17,7 @@ class SettingsState extends Equatable {
     this.contrastMode = ContrastMode.normal,
     this.textSizeScale = TextSizeScale.normal,
     this.fontWeightScale = FontWeightScale.normal,
+    this.notificationsEnabled = true,
     this.isLoaded = false,
   });
 
@@ -27,6 +29,7 @@ class SettingsState extends Equatable {
     contrastMode,
     textSizeScale,
     fontWeightScale,
+    notificationsEnabled,
     isLoaded,
   ];
 
@@ -37,6 +40,7 @@ class SettingsState extends Equatable {
     ContrastMode? contrastMode,
     TextSizeScale? textSizeScale,
     FontWeightScale? fontWeightScale,
+    bool? notificationsEnabled,
     bool? isLoaded,
   }) {
     return SettingsState(
@@ -46,6 +50,7 @@ class SettingsState extends Equatable {
       contrastMode: contrastMode ?? this.contrastMode,
       textSizeScale: textSizeScale ?? this.textSizeScale,
       fontWeightScale: fontWeightScale ?? this.fontWeightScale,
+      notificationsEnabled: notificationsEnabled ?? this.notificationsEnabled,
       isLoaded: isLoaded ?? this.isLoaded,
     );
   }

@@ -70,7 +70,7 @@ class AppLocalizations {
       'settings.weatherDataProvidedBy':
           'Weather data provided by WeatherAPI.com.',
       'settings.alertsDmc': 'Alerts: DMC Sri Lanka',
-      'settings.weatherOpenMeteo': 'Weather data: Open-Meteo',
+      'settings.weatherOpenMeteo': 'Weather data: WeatherAPI.com',
 
       'home.loadingWeather': 'Loading weather...',
       'home.weatherUnavailable': 'Weather data unavailable',
@@ -156,7 +156,7 @@ class AppLocalizations {
       'settings.weatherDataProvidedBy':
           'WeatherAPI.com මගින් ලබා දෙන කාලගුණ දත්ත.',
       'settings.alertsDmc': 'අනතුරු: DMC ශ්‍රී ලංකාව',
-      'settings.weatherOpenMeteo': 'කාලගුණ දත්ත: Open-Meteo',
+      'settings.weatherOpenMeteo': 'කාලගුණ දත්ත: WeatherAPI.com',
 
       'home.loadingWeather': 'කාලගුණය ලෝඩ් කරමින්...',
       'home.weatherUnavailable': 'කාලගුණ දත්ත ලබා ගත නොහැක',
@@ -242,7 +242,7 @@ class AppLocalizations {
       'settings.version': 'பதிப்பு 1.0.0',
       'settings.weatherDataProvidedBy': 'WeatherAPI.com வழங்கும் வானிலை தரவு.',
       'settings.alertsDmc': 'எச்சரிக்கைகள்: DMC இலங்கை',
-      'settings.weatherOpenMeteo': 'வானிலை தரவு: Open-Meteo',
+      'settings.weatherOpenMeteo': 'வானிலை தரவு: WeatherAPI.com',
 
       'home.loadingWeather': 'வானிலை ஏற்றப்படுகிறது...',
       'home.weatherUnavailable': 'வானிலை தரவு கிடைக்கவில்லை',

@@ -4,6 +4,9 @@ abstract class SettingsRepository {
   Future<bool> isDarkMode();
   Future<void> setDarkMode(bool value);
 
+  Future<bool> isNotificationsEnabled();
+  Future<void> setNotificationsEnabled(bool value);
+
   Future<AppLanguage> getLanguage();
   Future<void> setLanguage(AppLanguage language);
 

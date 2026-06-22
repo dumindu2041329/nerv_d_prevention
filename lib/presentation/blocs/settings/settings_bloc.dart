@@ -1,6 +1,7 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/notifications/local_notification_service.dart';
 import '../../../domain/repositories/settings_repository.dart';
 
 part 'settings_event.dart';
@@ -8,12 +9,17 @@ part 'settings_state.dart';
 
 class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
   final SettingsRepository _settingsRepository;
+  final LocalNotificationService _notificationService;
 
-  SettingsBloc({required SettingsRepository settingsRepository})
-    : _settingsRepository = settingsRepository,
-      super(const SettingsState()) {
+  SettingsBloc({
+    required SettingsRepository settingsRepository,
+    required LocalNotificationService notificationService,
+  }) : _settingsRepository = settingsRepository,
+       _notificationService = notificationService,
+       super(const SettingsState()) {
     on<LoadSettings>(_onLoadSettings);
     on<ToggleDarkMode>(_onToggleDarkMode);
+    on<ToggleNotifications>(_onToggleNotifications);
     on<SetLanguage>(_onSetLanguage);
     on<SetColourVisionMode>(_onSetColourVisionMode);
     on<SetContrastMode>(_onSetContrastMode);
@@ -31,6 +37,8 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     final contrastMode = await _settingsRepository.getContrastMode();
     final textSizeScale = await _settingsRepository.getTextSizeScale();
     final fontWeightScale = await _settingsRepository.getFontWeightScale();
+    final notificationsEnabled =
+        await _settingsRepository.isNotificationsEnabled();
 
     emit(
       SettingsState(
@@ -40,6 +48,7 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
         contrastMode: contrastMode,
         textSizeScale: textSizeScale,
         fontWeightScale: fontWeightScale,
+        notificationsEnabled: notificationsEnabled,
         isLoaded: true,
       ),
     );
@@ -52,6 +61,32 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     final newValue = !state.isDarkMode;
     await _settingsRepository.setDarkMode(newValue);
     emit(state.copyWith(isDarkMode: newValue));
+  }
+
+  Future<void> _onToggleNotifications(
+    ToggleNotifications event,
+    Emitter<SettingsState> emit,
+  ) async {
+    final newValue = !state.notificationsEnabled;
+    await _settingsRepository.setNotificationsEnabled(newValue);
+
+    // When the user turns notifications on, ask the OS for permission
+    // so future Critical/Emergency alerts can actually surface on the
+    // device. Failures are non-fatal — the in-app toggle stays on and
+    // the next settings refresh can retry.
+    if (newValue) {
+      try {
+        await _notificationService.requestPermissions();
+        // Fire a real on-device confirmation toast so the user can
+        // verify the notification pipeline is actually wired up.
+        await _notificationService.showWelcomeNotification();
+      } catch (_) {
+        // Permission denial shouldn't crash the bloc; the in-app
+        // toggle reflects the user's intent regardless of OS state.
+      }
+    }
+
+    emit(state.copyWith(notificationsEnabled: newValue));
   }
 
   Future<void> _onSetLanguage(

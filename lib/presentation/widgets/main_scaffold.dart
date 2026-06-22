@@ -71,7 +71,7 @@ class _MainScaffoldState extends State<MainScaffold> {
           color: theme.scaffoldBackgroundColor,
           border: Border(
             top: BorderSide(
-              color: theme.dividerTheme.color ?? const Color(0xFF2A2A2A),
+              color: theme.dividerTheme.color ?? Colors.transparent,
               width: 0.5,
             ),
           ),

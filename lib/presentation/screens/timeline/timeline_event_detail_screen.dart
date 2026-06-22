@@ -22,11 +22,13 @@ class TimelineEventDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final color = event.severity.color;
     final report = _buildReport(event);
+    final onSurface = theme.colorScheme.onSurface;
 
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: theme.scaffoldBackgroundColor,
       body: SafeArea(
         bottom: false,
         child: SingleChildScrollView(
@@ -35,20 +37,20 @@ class TimelineEventDetailScreen extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               _buildHeader(context, color),
-              _buildMapPreview(color),
-              _buildReportHeader(report),
-              _buildHighlightBox(report),
-              _buildMetadataRows(report),
-              const Divider(
+              _buildMapPreview(context, color),
+              _buildReportHeader(context, report),
+              _buildHighlightBox(context, report),
+              _buildMetadataRows(context, report),
+              Divider(
                 height: 32,
                 thickness: 0.5,
                 indent: 20,
                 endIndent: 20,
-                color: Color(0x33FFFFFF),
+                color: onSurface.withValues(alpha: 0.18),
               ),
-              _buildStatusMessage(report),
+              _buildStatusMessage(context, report),
               const SizedBox(height: 24),
-              _buildIntensityChips(report),
+              _buildIntensityChips(context, report),
             ],
           ),
         ),
@@ -59,15 +61,16 @@ class TimelineEventDetailScreen extends StatelessWidget {
   // ── Header ──────────────────────────────────────────────────────────
 
   Widget _buildHeader(BuildContext context, Color color) {
+    final onSurface = Theme.of(context).colorScheme.onSurface;
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 8, 8, 12),
       child: Row(
         children: [
           IconButton(
             onPressed: () => context.pop(),
-            icon: const Icon(
+            icon: Icon(
               Icons.chevron_left,
-              color: Colors.white,
+              color: onSurface,
               size: 28,
             ),
           ),
@@ -75,8 +78,8 @@ class TimelineEventDetailScreen extends StatelessWidget {
             child: Center(
               child: Text(
                 _titleFor(event.type),
-                style: const TextStyle(
-                  color: Colors.white,
+                style: TextStyle(
+                  color: onSurface,
                   fontSize: 18,
                   fontWeight: FontWeight.w700,
                 ),
@@ -91,12 +94,14 @@ class TimelineEventDetailScreen extends StatelessWidget {
 
   // ── Map Preview ─────────────────────────────────────────────────────
 
-  Widget _buildMapPreview(Color color) {
+  Widget _buildMapPreview(BuildContext context, Color color) {
     // Use the event's real coordinates when available, otherwise fall
     // back to the Sri Lanka map center.
     final LatLng point = (event.latitude != null && event.longitude != null)
         ? LatLng(event.latitude!, event.longitude!)
         : SLMapConstants.center;
+
+    final fadeColor = Theme.of(context).scaffoldBackgroundColor;
 
     return SizedBox(
       height: 220,
@@ -133,7 +138,7 @@ class TimelineEventDetailScreen extends StatelessWidget {
               ],
             ),
           ),
-          // Soft bottom fade to blend with the black background
+          // Soft bottom fade to blend with the page background
           Positioned(
             left: 0,
             right: 0,
@@ -147,7 +152,7 @@ class TimelineEventDetailScreen extends StatelessWidget {
                     end: Alignment.bottomCenter,
                     colors: [
                       Colors.transparent,
-                      Colors.black.withValues(alpha: 0.6),
+                      fadeColor.withValues(alpha: 0.6),
                     ],
                   ),
                 ),
@@ -161,7 +166,8 @@ class TimelineEventDetailScreen extends StatelessWidget {
 
   // ── Report Header ───────────────────────────────────────────────────
 
-  Widget _buildReportHeader(_EventReport report) {
+  Widget _buildReportHeader(BuildContext context, _EventReport report) {
+    final onSurface = Theme.of(context).colorScheme.onSurface;
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
       child: Row(
@@ -171,10 +177,10 @@ class TimelineEventDetailScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   'Detailed Area Report',
                   style: TextStyle(
-                    color: Colors.white,
+                    color: onSurface,
                     fontSize: 22,
                     fontWeight: FontWeight.w700,
                   ),
@@ -183,7 +189,7 @@ class TimelineEventDetailScreen extends StatelessWidget {
                 Text(
                   'As of ${_formatReportDateTime(event.time)}',
                   style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.55),
+                    color: onSurface.withValues(alpha: 0.6),
                     fontSize: 13,
                   ),
                 ),
@@ -199,13 +205,16 @@ class TimelineEventDetailScreen extends StatelessWidget {
 
   // ── Highlight Box (Max Intensity + Magnitude) ───────────────────────
 
-  Widget _buildHighlightBox(_EventReport report) {
+  Widget _buildHighlightBox(BuildContext context, _EventReport report) {
+    final highlightBg = Theme.of(context).brightness == Brightness.dark
+        ? const Color(0xFF8FB8E0)
+        : const Color(0xFFB3CDF0);
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 22),
         decoration: BoxDecoration(
-          color: const Color(0xFF8FB8E0),
+          color: highlightBg,
           borderRadius: BorderRadius.circular(12),
         ),
         child: Row(
@@ -269,7 +278,8 @@ class TimelineEventDetailScreen extends StatelessWidget {
 
   // ── Metadata rows ───────────────────────────────────────────────────
 
-  Widget _buildMetadataRows(_EventReport report) {
+  Widget _buildMetadataRows(BuildContext context, _EventReport report) {
+    final onSurface = Theme.of(context).colorScheme.onSurface;
     final rows = <_MetaRow>[
       _MetaRow('Date/Time', report.dateTime),
       _MetaRow('Epicenter', report.epicenter),
@@ -285,7 +295,7 @@ class TimelineEventDetailScreen extends StatelessWidget {
               Divider(
                 height: 24,
                 thickness: 0.4,
-                color: Colors.white.withValues(alpha: 0.1),
+                color: onSurface.withValues(alpha: 0.15),
               ),
           ],
         ],
@@ -295,13 +305,14 @@ class TimelineEventDetailScreen extends StatelessWidget {
 
   // ── Status message ──────────────────────────────────────────────────
 
-  Widget _buildStatusMessage(_EventReport report) {
+  Widget _buildStatusMessage(BuildContext context, _EventReport report) {
+    final onSurface = Theme.of(context).colorScheme.onSurface;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Text(
         report.statusMessage,
-        style: const TextStyle(
-          color: Colors.white,
+        style: TextStyle(
+          color: onSurface,
           fontSize: 15,
           fontWeight: FontWeight.w500,
         ),
@@ -311,8 +322,12 @@ class TimelineEventDetailScreen extends StatelessWidget {
 
   // ── Intensity chips ─────────────────────────────────────────────────
 
-  Widget _buildIntensityChips(_EventReport report) {
+  Widget _buildIntensityChips(BuildContext context, _EventReport report) {
     if (report.intensityEntries.isEmpty) return const SizedBox.shrink();
+    final onSurface = Theme.of(context).colorScheme.onSurface;
+    final chipBg = Theme.of(context).brightness == Brightness.dark
+        ? const Color(0xFF8FB8E0)
+        : const Color(0xFFB3CDF0);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Column(
@@ -329,7 +344,7 @@ class TimelineEventDetailScreen extends StatelessWidget {
                     vertical: 6,
                   ),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF8FB8E0),
+                    color: chipBg,
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
@@ -346,7 +361,7 @@ class TimelineEventDetailScreen extends StatelessWidget {
                   child: Text(
                     entry.place,
                     style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.85),
+                      color: onSurface.withValues(alpha: 0.85),
                       fontSize: 14,
                       height: 1.35,
                     ),
@@ -486,6 +501,7 @@ class _MetaRowTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final onSurface = Theme.of(context).colorScheme.onSurface;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
@@ -498,7 +514,7 @@ class _MetaRowTile extends StatelessWidget {
               child: Text(
                 row.label,
                 style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.55),
+                  color: onSurface.withValues(alpha: 0.6),
                   fontSize: 14,
                 ),
               ),
@@ -507,8 +523,8 @@ class _MetaRowTile extends StatelessWidget {
           Expanded(
             child: Text(
               row.value,
-              style: const TextStyle(
-                color: Colors.white,
+              style: TextStyle(
+                color: onSurface,
                 fontSize: 17,
                 fontWeight: FontWeight.w500,
               ),
@@ -552,6 +568,12 @@ class _EventPin extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final pinBackdrop = Theme.of(context).brightness == Brightness.dark
+        ? Colors.black.withValues(alpha: 0.25)
+        : Colors.white.withValues(alpha: 0.6);
+    final chipBg = Theme.of(context).brightness == Brightness.dark
+        ? const Color(0xFF8FB8E0)
+        : const Color(0xFFB3CDF0);
     return Stack(
       alignment: Alignment.center,
       children: [
@@ -560,7 +582,7 @@ class _EventPin extends StatelessWidget {
           height: 40,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: Colors.black.withValues(alpha: 0.25),
+            color: pinBackdrop,
           ),
         ),
         Icon(Icons.close, color: color, size: 32),
@@ -570,7 +592,7 @@ class _EventPin extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
             decoration: BoxDecoration(
-              color: const Color(0xFF8FB8E0),
+              color: chipBg,
               borderRadius: BorderRadius.circular(4),
             ),
             child: Text(

@@ -22,6 +22,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return BlocProvider(
       create: (_) => getIt<WeatherBloc>()..add(
         LoadWeather(
@@ -35,7 +36,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
         ),
       ),
       child: Scaffold(
-        backgroundColor: Colors.black,
+        backgroundColor: theme.scaffoldBackgroundColor,
         body: Stack(
           children: [
             // Map background
@@ -71,18 +72,28 @@ class _WeatherScreenState extends State<WeatherScreen> {
               controller: _sheetController,
               builder: (context, scrollController) {
                 return Container(
-                  decoration: const BoxDecoration(
-                    color: Colors.black,
-                    borderRadius: BorderRadius.vertical(
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surface,
+                    borderRadius: const BorderRadius.vertical(
                       top: Radius.circular(16),
                     ),
+                    boxShadow: theme.brightness == Brightness.light
+                        ? [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.08),
+                              blurRadius: 12,
+                              offset: const Offset(0, -2),
+                            ),
+                          ]
+                        : null,
                   ),
                   child: BlocBuilder<WeatherBloc, WeatherState>(
                     builder: (context, state) {
+                      final onSurface = theme.colorScheme.onSurface;
                       if (state is WeatherLoading) {
                         return Center(
                           child: CircularProgressIndicator(
-                            color: const Color(0xFF00BCD4),
+                            color: theme.colorScheme.primary,
                           ),
                         );
                       }
@@ -92,7 +103,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
                           child: Text(
                             state.message,
                             style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.5),
+                              color: onSurface.withValues(alpha: 0.6),
                             ),
                           ),
                         );
@@ -110,7 +121,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
                         child: Text(
                           'Loading weather...',
                           style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.4),
+                            color: onSurface.withValues(alpha: 0.5),
                             fontSize: 14,
                           ),
                         ),
@@ -131,13 +142,13 @@ class _WeatherScreenState extends State<WeatherScreen> {
     ScrollController scrollController,
     WeatherLoaded state,
   ) {
+    final theme = Theme.of(context);
+    final onSurface = theme.colorScheme.onSurface;
     final data = state.weatherData;
     final current = data.current;
     final hourly = data.hourly;
     final daily = data.daily;
-    final locationName =
-        state.location?.name ??
-        'Current Location';
+    final locationName = state.location?.name ?? 'Current Location';
 
     final now = DateTime.now();
     final weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -159,7 +170,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
                     width: 40,
                     height: 4,
                     decoration: BoxDecoration(
-                      color: const Color(0xFF4A4A4A),
+                      color: onSurface.withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
@@ -167,8 +178,8 @@ class _WeatherScreenState extends State<WeatherScreen> {
                 const SizedBox(height: 20),
                 Text(
                   '$locationName Weather',
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: onSurface,
                     fontSize: 22,
                     fontWeight: FontWeight.w700,
                   ),
@@ -177,12 +188,15 @@ class _WeatherScreenState extends State<WeatherScreen> {
                 Text(
                   '${now.year}/${now.month.toString().padLeft(2, '0')}/${now.day.toString().padLeft(2, '0')} ($dayName)',
                   style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.5),
+                    color: onSurface.withValues(alpha: 0.6),
                     fontSize: 14,
                   ),
                 ),
                 const SizedBox(height: 12),
-                Divider(color: Colors.white.withValues(alpha: 0.1), height: 1),
+                Divider(
+                  color: onSurface.withValues(alpha: 0.12),
+                  height: 1,
+                ),
               ],
             ),
           ),
@@ -190,14 +204,14 @@ class _WeatherScreenState extends State<WeatherScreen> {
 
         // ── Current Conditions ──
         SliverToBoxAdapter(
-          child: _buildCurrentConditionsDetail(current, locationName),
+          child: _buildCurrentConditionsDetail(context, current, locationName),
         ),
 
         // ── Hourly forecast strip ──
-        SliverToBoxAdapter(child: _buildHourlySection(hourly)),
+        SliverToBoxAdapter(child: _buildHourlySection(context, hourly)),
 
         // ── 5-Day forecast ──
-        SliverToBoxAdapter(child: _buildDailySection(daily)),
+        SliverToBoxAdapter(child: _buildDailySection(context, daily)),
 
         // Bottom padding
         const SliverToBoxAdapter(child: SizedBox(height: 32)),
@@ -207,9 +221,21 @@ class _WeatherScreenState extends State<WeatherScreen> {
 
   // ── Current Conditions Detail ──────────────────────────────────────
 
-  Widget _buildCurrentConditionsDetail(dynamic current, String locationName) {
-    final weatherDesc = WeatherCodeMapping.getDescription(current.weatherCode, isDay: current.isDay);
-    final weatherEmoji = WeatherCodeMapping.getIcon(current.weatherCode, isDay: current.isDay);
+  Widget _buildCurrentConditionsDetail(
+    BuildContext context,
+    dynamic current,
+    String locationName,
+  ) {
+    final theme = Theme.of(context);
+    final onSurface = theme.colorScheme.onSurface;
+    final weatherDesc = WeatherCodeMapping.getDescription(
+      current.weatherCode,
+      isDay: current.isDay,
+    );
+    final weatherEmoji = WeatherCodeMapping.getIcon(
+      current.weatherCode,
+      isDay: current.isDay,
+    );
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
@@ -226,8 +252,8 @@ class _WeatherScreenState extends State<WeatherScreen> {
                 children: [
                   Text(
                     '${current.temperature.toStringAsFixed(1)}°C',
-                    style: const TextStyle(
-                      color: Colors.white,
+                    style: TextStyle(
+                      color: onSurface,
                       fontSize: 56,
                       fontWeight: FontWeight.w200,
                       letterSpacing: -2,
@@ -238,7 +264,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
                   Text(
                     weatherDesc,
                     style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.6),
+                      color: onSurface.withValues(alpha: 0.65),
                       fontSize: 16,
                     ),
                   ),
@@ -252,6 +278,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
             children: [
               Expanded(
                 child: _detailTile(
+                  context,
                   'Feels Like',
                   '${current.apparentTemperature.toStringAsFixed(1)}°C',
                   Icons.thermostat,
@@ -260,6 +287,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
               const SizedBox(width: 12),
               Expanded(
                 child: _detailTile(
+                  context,
                   'Humidity',
                   '${current.humidity.toStringAsFixed(0)}%',
                   Icons.water_drop,
@@ -272,6 +300,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
             children: [
               Expanded(
                 child: _detailTile(
+                  context,
                   'Wind',
                   '${current.windSpeed.toStringAsFixed(1)} km/h',
                   Icons.air,
@@ -280,6 +309,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
               const SizedBox(width: 12),
               Expanded(
                 child: _detailTile(
+                  context,
                   'Pressure',
                   '${current.surfacePressure.toStringAsFixed(0)} hPa',
                   Icons.speed,
@@ -292,6 +322,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
             children: [
               Expanded(
                 child: _detailTile(
+                  context,
                   'UV Index',
                   current.uvIndex.toStringAsFixed(1),
                   Icons.wb_sunny,
@@ -300,6 +331,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
               const SizedBox(width: 12),
               Expanded(
                 child: _detailTile(
+                  context,
                   'Cloud Cover',
                   '${current.cloudCover.toStringAsFixed(0)}%',
                   Icons.cloud,
@@ -312,20 +344,30 @@ class _WeatherScreenState extends State<WeatherScreen> {
     );
   }
 
-  Widget _detailTile(String label, String value, IconData icon) {
+  Widget _detailTile(
+    BuildContext context,
+    String label,
+    String value,
+    IconData icon,
+  ) {
+    final theme = Theme.of(context);
+    final onSurface = theme.colorScheme.onSurface;
+    final tileColor = theme.brightness == Brightness.dark
+        ? const Color(0xFF1A1A1A)
+        : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.6);
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xFF1A1A1A),
+        color: tileColor,
         borderRadius: BorderRadius.circular(10),
         border: Border.all(
-          color: Colors.white.withValues(alpha: 0.06),
+          color: theme.dividerTheme.color ?? onSurface.withValues(alpha: 0.1),
           width: 0.5,
         ),
       ),
       child: Row(
         children: [
-          Icon(icon, size: 18, color: Colors.white.withValues(alpha: 0.5)),
+          Icon(icon, size: 18, color: onSurface.withValues(alpha: 0.55)),
           const SizedBox(width: 8),
           Expanded(
             child: Column(
@@ -334,15 +376,15 @@ class _WeatherScreenState extends State<WeatherScreen> {
                 Text(
                   label,
                   style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.4),
+                    color: onSurface.withValues(alpha: 0.55),
                     fontSize: 11,
                   ),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   value,
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: onSurface,
                     fontSize: 15,
                     fontWeight: FontWeight.w600,
                   ),
@@ -357,7 +399,12 @@ class _WeatherScreenState extends State<WeatherScreen> {
 
   // ── Hourly Forecast Strip ──────────────────────────────────────────
 
-  Widget _buildHourlySection(dynamic hourly) {
+  Widget _buildHourlySection(BuildContext context, dynamic hourly) {
+    final theme = Theme.of(context);
+    final onSurface = theme.colorScheme.onSurface;
+    final tileColor = theme.brightness == Brightness.dark
+        ? const Color(0xFF1A1A1A)
+        : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.6);
     return Padding(
       padding: const EdgeInsets.only(top: 8),
       child: Column(
@@ -367,10 +414,10 @@ class _WeatherScreenState extends State<WeatherScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Row(
               children: [
-                const Text(
+                Text(
                   'Hourly Forecast',
                   style: TextStyle(
-                    color: Colors.white,
+                    color: onSurface,
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
                   ),
@@ -379,7 +426,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
                 Text(
                   '12 hours',
                   style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.4),
+                    color: onSurface.withValues(alpha: 0.5),
                     fontSize: 12,
                   ),
                 ),
@@ -396,13 +443,13 @@ class _WeatherScreenState extends State<WeatherScreen> {
               separatorBuilder: (_, _) => const SizedBox(width: 4),
               itemBuilder: (context, index) {
                 final hour = hourly[index];
-                return _buildHourlyChip(hour);
+                return _buildHourlyChip(context, hour, tileColor);
               },
             ),
           ),
           const SizedBox(height: 8),
           Divider(
-            color: Colors.white.withValues(alpha: 0.08),
+            color: onSurface.withValues(alpha: 0.1),
             height: 1,
             indent: 20,
             endIndent: 20,
@@ -412,7 +459,13 @@ class _WeatherScreenState extends State<WeatherScreen> {
     );
   }
 
-  Widget _buildHourlyChip(dynamic hour) {
+  Widget _buildHourlyChip(
+    BuildContext context,
+    dynamic hour,
+    Color tileColor,
+  ) {
+    final theme = Theme.of(context);
+    final onSurface = theme.colorScheme.onSurface;
     final hourIsDay = hour.time.hour >= 6 && hour.time.hour < 18;
     final emoji = WeatherCodeMapping.getIcon(hour.weatherCode, isDay: hourIsDay);
     final timeLabel = DateTimeUtils.formatTime(hour.time);
@@ -421,10 +474,10 @@ class _WeatherScreenState extends State<WeatherScreen> {
       width: 72,
       padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
       decoration: BoxDecoration(
-        color: const Color(0xFF1A1A1A),
+        color: tileColor,
         borderRadius: BorderRadius.circular(10),
         border: Border.all(
-          color: Colors.white.withValues(alpha: 0.06),
+          color: theme.dividerTheme.color ?? onSurface.withValues(alpha: 0.1),
           width: 0.5,
         ),
       ),
@@ -434,8 +487,8 @@ class _WeatherScreenState extends State<WeatherScreen> {
           Text(emoji, style: const TextStyle(fontSize: 22)),
           Text(
             '${hour.temperature.toStringAsFixed(0)}°',
-            style: const TextStyle(
-              color: Colors.white,
+            style: TextStyle(
+              color: onSurface,
               fontSize: 15,
               fontWeight: FontWeight.w600,
             ),
@@ -443,15 +496,15 @@ class _WeatherScreenState extends State<WeatherScreen> {
           Text(
             timeLabel,
             style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.5),
+              color: onSurface.withValues(alpha: 0.6),
               fontSize: 10,
             ),
           ),
           if (hour.precipitationProbability > 0)
             Text(
               '${hour.precipitationProbability.toStringAsFixed(0)}%',
-              style: const TextStyle(
-                color: Color(0xFF00BCD4),
+              style: TextStyle(
+                color: theme.colorScheme.primary,
                 fontSize: 9,
                 fontWeight: FontWeight.w500,
               ),
@@ -463,20 +516,22 @@ class _WeatherScreenState extends State<WeatherScreen> {
 
   // ── Daily Forecast ──────────────────────────────────────────────────
 
-  Widget _buildDailySection(dynamic daily) {
+  Widget _buildDailySection(BuildContext context, dynamic daily) {
     if (daily.isEmpty) return const SizedBox.shrink();
+    final theme = Theme.of(context);
+    final onSurface = theme.colorScheme.onSurface;
 
     return Padding(
       padding: const EdgeInsets.only(top: 4),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 20),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Text(
               '5-Day Forecast',
               style: TextStyle(
-                color: Colors.white,
+                color: onSurface,
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
               ),
@@ -486,16 +541,31 @@ class _WeatherScreenState extends State<WeatherScreen> {
           ...daily.asMap().entries.map((entry) {
             final index = entry.key;
             final day = entry.value;
-            return _buildDailyCard(day, index, index == daily.length - 1);
+            return _buildDailyCard(
+              context,
+              day,
+              index,
+              index == daily.length - 1,
+            );
           }),
         ],
       ),
     );
   }
 
-  Widget _buildDailyCard(dynamic day, int index, bool isLast) {
+  Widget _buildDailyCard(
+    BuildContext context,
+    dynamic day,
+    int index,
+    bool isLast,
+  ) {
+    final theme = Theme.of(context);
+    final onSurface = theme.colorScheme.onSurface;
     final emoji = WeatherCodeMapping.getIcon(day.weatherCode, isDay: true);
-    final desc = WeatherCodeMapping.getDescription(day.weatherCode, isDay: true);
+    final desc = WeatherCodeMapping.getDescription(
+      day.weatherCode,
+      isDay: true,
+    );
 
     String dayLabel;
     if (index == 0) {
@@ -515,7 +585,8 @@ class _WeatherScreenState extends State<WeatherScreen> {
             ? null
             : Border(
                 bottom: BorderSide(
-                  color: Colors.white.withValues(alpha: 0.06),
+                  color: theme.dividerTheme.color ??
+                      onSurface.withValues(alpha: 0.08),
                   width: 0.5,
                 ),
               ),
@@ -530,8 +601,8 @@ class _WeatherScreenState extends State<WeatherScreen> {
               children: [
                 Text(
                   dayLabel,
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: onSurface,
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
                   ),
@@ -540,7 +611,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
                 Text(
                   desc,
                   style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.4),
+                    color: onSurface.withValues(alpha: 0.5),
                     fontSize: 11,
                   ),
                 ),
@@ -558,13 +629,13 @@ class _WeatherScreenState extends State<WeatherScreen> {
                 Icon(
                   Icons.water_drop,
                   size: 12,
-                  color: const Color(0xFF00BCD4).withValues(alpha: 0.7),
+                  color: theme.colorScheme.primary.withValues(alpha: 0.85),
                 ),
                 const SizedBox(width: 2),
                 Text(
                   '${day.precipitationProbabilityMax.toStringAsFixed(0)}%',
                   style: TextStyle(
-                    color: const Color(0xFF00BCD4).withValues(alpha: 0.7),
+                    color: theme.colorScheme.primary.withValues(alpha: 0.85),
                     fontSize: 11,
                     fontWeight: FontWeight.w500,
                   ),
@@ -579,7 +650,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
               Text(
                 '${day.temperatureMin.toStringAsFixed(0)}°',
                 style: TextStyle(
-                  color: const Color(0xFF00BCD4).withValues(alpha: 0.8),
+                  color: theme.colorScheme.primary.withValues(alpha: 0.9),
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
                 ),
@@ -590,14 +661,25 @@ class _WeatherScreenState extends State<WeatherScreen> {
                 height: 4,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(2),
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF00BCD4), Color(0xFFFF6B00)],
+                  gradient: LinearGradient(
+                    colors: [
+                      theme.colorScheme.primary,
+                      const Color(0xFFFF6B00),
+                    ],
                   ),
                 ),
               ),
               const SizedBox(width: 8),
+              const Text(
+                '°',
+                style: TextStyle(
+                  color: Color(0xFFFF6B00),
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
               Text(
-                '${day.temperatureMax.toStringAsFixed(0)}°',
+                '${day.temperatureMax.toStringAsFixed(0)}',
                 style: const TextStyle(
                   color: Color(0xFFFF6B00),
                   fontSize: 14,

@@ -76,6 +76,8 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return BlocListener<WeatherBloc, WeatherState>(
       listener: (context, state) {
         if (!_isIslandWide &&
@@ -90,7 +92,7 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
         }
       },
       child: Scaffold(
-        backgroundColor: Colors.black,
+        backgroundColor: theme.scaffoldBackgroundColor,
         body: Column(
           children: [
             // Top toggle bar — Island-wide / Local + SOS fetch button
@@ -112,8 +114,8 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
                         context.read<AlertBloc>().add(const RefreshAlerts());
                       },
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF00BCD4),
-                        foregroundColor: Colors.black,
+                        backgroundColor: const Color(0xFFFF1744),
+                        foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(
                           horizontal: 12,
                           vertical: 10,
@@ -123,7 +125,13 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
                         ),
                       ),
                       icon: const Icon(Icons.sos_outlined),
-                      label: const Text('SOS Alerts'),
+                      label: Text(
+                        'SOS Alerts',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -207,15 +215,17 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
   // ── Weather + Alert Section ──────────────────────────────────────────
 
   Widget _buildWeatherAlertSection(BuildContext context) {
+    final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
+    final onSurface = theme.colorScheme.onSurface;
 
     return Container(
-      color: Colors.black,
+      color: theme.colorScheme.surface,
       child: BlocBuilder<WeatherBloc, WeatherState>(
         builder: (context, state) {
           if (state is WeatherLoading) {
-            return const Center(
-              child: CircularProgressIndicator(color: Color(0xFF00BCD4)),
+            return Center(
+              child: CircularProgressIndicator(color: theme.colorScheme.primary),
             );
           }
 
@@ -226,7 +236,7 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
                 child: Text(
                   l10n.t('home.weatherUnavailable'),
                   style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.5),
+                    color: onSurface.withValues(alpha: 0.6),
                     fontSize: 16,
                   ),
                 ),
@@ -243,7 +253,7 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
             child: Text(
               l10n.t('home.loadingWeather'),
               style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.4),
+                color: onSurface.withValues(alpha: 0.5),
                 fontSize: 14,
               ),
             ),
@@ -254,7 +264,9 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
   }
 
   Widget _buildLoadedContent(BuildContext context, WeatherLoaded state) {
+    final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
+    final onSurface = theme.colorScheme.onSurface;
     final data = state.weatherData;
     final current = data.current;
     final alerts = WeatherAlertDeriver.deriveAlerts(
@@ -263,8 +275,8 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
     );
 
     return RefreshIndicator(
-      color: const Color(0xFF00BCD4),
-      backgroundColor: const Color(0xFF1A1A1A),
+      color: theme.colorScheme.primary,
+      backgroundColor: theme.colorScheme.surface,
       onRefresh: () async {
         // Refresh both the local weather and the upstream SOS pipeline.
         context.read<WeatherBloc>().add(const RefreshWeather());
@@ -289,7 +301,7 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
                         child: Text(
                           '${l10n.t('home.sosStalePrefix')}${_formatRelativeTime(alertState.lastFetched)}',
                           style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.4),
+                            color: onSurface.withValues(alpha: 0.5),
                             fontSize: 11,
                           ),
                         ),
@@ -321,8 +333,8 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
             _isIslandWide
                 ? l10n.t('home.islandWide')
                 : state.location?.name ?? l10n.t('home.local'),
-            style: const TextStyle(
-              color: Colors.white,
+            style: TextStyle(
+              color: onSurface,
               fontSize: 24,
               fontWeight: FontWeight.w700,
             ),
@@ -330,7 +342,7 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
           const SizedBox(height: 8),
 
           // ── Current conditions chip ──
-          _buildCurrentConditionsChip(current, state.location?.name),
+          _buildCurrentConditionsChip(context, current, state.location?.name),
           const SizedBox(height: 16),
 
           // ── Derived alerts ──
@@ -338,6 +350,7 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
             (alert) => Padding(
               padding: const EdgeInsets.only(bottom: 12),
               child: _buildAlertInfoCard(
+                context,
                 title: alert.title,
                 alertType: alert.alertType,
                 severity: alert.severity,
@@ -369,7 +382,13 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
 
   // ── Current Conditions Chip ──────────────────────────────────────────
 
-  Widget _buildCurrentConditionsChip(dynamic current, String? locationName) {
+  Widget _buildCurrentConditionsChip(
+    BuildContext context,
+    dynamic current,
+    String? locationName,
+  ) {
+    final theme = Theme.of(context);
+    final onSurface = theme.colorScheme.onSurface;
     final temp = current.temperature;
     final feelsLike = current.apparentTemperature;
     final humidity = current.humidity;
@@ -386,10 +405,10 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF1A1A1A),
+        color: theme.cardTheme.color ?? theme.colorScheme.surface,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: Colors.white.withValues(alpha: 0.08),
+          color: theme.dividerTheme.color ?? onSurface.withValues(alpha: 0.1),
           width: 0.5,
         ),
       ),
@@ -406,8 +425,8 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
                   const SizedBox(width: 8),
                   Text(
                     '${temp.toStringAsFixed(1)}°C',
-                    style: const TextStyle(
-                      color: Colors.white,
+                    style: TextStyle(
+                      color: onSurface,
                       fontSize: 36,
                       fontWeight: FontWeight.w300,
                       letterSpacing: -1,
@@ -419,7 +438,7 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
               Text(
                 weatherDesc,
                 style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.6),
+                  color: onSurface.withValues(alpha: 0.65),
                   fontSize: 14,
                 ),
               ),
@@ -431,13 +450,22 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               _conditionDetail(
+                context,
                 'Feels like',
                 '${feelsLike.toStringAsFixed(1)}°C',
               ),
               const SizedBox(height: 4),
-              _conditionDetail('Humidity', '${humidity.toStringAsFixed(0)}%'),
+              _conditionDetail(
+                context,
+                'Humidity',
+                '${humidity.toStringAsFixed(0)}%',
+              ),
               const SizedBox(height: 4),
-              _conditionDetail('Wind', '${windSpeed.toStringAsFixed(1)} km/h'),
+              _conditionDetail(
+                context,
+                'Wind',
+                '${windSpeed.toStringAsFixed(1)} km/h',
+              ),
             ],
           ),
         ],
@@ -445,21 +473,23 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
     );
   }
 
-  Widget _conditionDetail(String label, String value) {
+  Widget _conditionDetail(BuildContext context, String label, String value) {
+    final theme = Theme.of(context);
+    final onSurface = theme.colorScheme.onSurface;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
           '$label ',
           style: TextStyle(
-            color: Colors.white.withValues(alpha: 0.4),
+            color: onSurface.withValues(alpha: 0.5),
             fontSize: 12,
           ),
         ),
         Text(
           value,
-          style: const TextStyle(
-            color: Colors.white,
+          style: TextStyle(
+            color: onSurface,
             fontSize: 12,
             fontWeight: FontWeight.w600,
           ),
@@ -470,13 +500,16 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
 
   // ── Alert Card ───────────────────────────────────────────────────────
 
-  Widget _buildAlertInfoCard({
+  Widget _buildAlertInfoCard(
+    BuildContext context, {
     required String title,
     required SLAlertType alertType,
     required SeverityLevel severity,
     required String timestamp,
     required String description,
   }) {
+    final theme = Theme.of(context);
+    final onSurface = theme.colorScheme.onSurface;
     final color = severity == SeverityLevel.calm
         ? severity.color
         : Color(int.parse(alertType.hexColor.replaceFirst('#', '0xFF')));
@@ -500,7 +533,7 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
             ),
             child: Icon(
               _getAlertIcon(alertType),
-              color: color.withValues(alpha: 0.85),
+              color: color.withValues(alpha: 0.9),
               size: 22,
             ),
           ),
@@ -515,8 +548,8 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
                     Expanded(
                       child: Text(
                         title,
-                        style: const TextStyle(
-                          color: Colors.white,
+                        style: TextStyle(
+                          color: onSurface,
                           fontSize: 18,
                           fontWeight: FontWeight.w700,
                         ),
@@ -548,7 +581,7 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
                 Text(
                   timestamp,
                   style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.4),
+                    color: onSurface.withValues(alpha: 0.5),
                     fontSize: 13,
                   ),
                 ),
@@ -556,7 +589,7 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
                 Text(
                   description,
                   style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.8),
+                    color: onSurface.withValues(alpha: 0.85),
                     fontSize: 15,
                     height: 1.5,
                   ),
@@ -571,7 +604,7 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
             padding: const EdgeInsets.only(top: 4),
             child: Icon(
               Icons.chevron_right,
-              color: Colors.white.withValues(alpha: 0.3),
+              color: onSurface.withValues(alpha: 0.35),
               size: 24,
             ),
           ),
@@ -602,6 +635,8 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
   // ── Location Marker ─────────────────────────────────────────────────
 
   Widget _buildLocationMarker() {
+    final theme = Theme.of(context);
+    final primary = theme.colorScheme.primary;
     return Stack(
       alignment: Alignment.center,
       children: [
@@ -611,9 +646,9 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
           height: 40,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: const Color(0xFF00BCD4).withValues(alpha: 0.15),
+            color: primary.withValues(alpha: 0.15),
             border: Border.all(
-              color: const Color(0xFF00BCD4).withValues(alpha: 0.35),
+              color: primary.withValues(alpha: 0.35),
               width: 1.5,
             ),
           ),
@@ -624,14 +659,14 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
           height: 14,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: const Color(0xFF00BCD4),
+            color: primary,
             border: Border.all(
-              color: Colors.white.withValues(alpha: 0.9),
+              color: theme.colorScheme.onPrimary,
               width: 2,
             ),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF00BCD4).withValues(alpha: 0.5),
+                color: primary.withValues(alpha: 0.5),
                 blurRadius: 8,
                 spreadRadius: 1,
               ),

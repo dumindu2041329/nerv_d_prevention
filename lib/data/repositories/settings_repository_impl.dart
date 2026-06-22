@@ -19,6 +19,16 @@ class SettingsRepositoryImpl implements SettingsRepository {
   }
 
   @override
+  Future<bool> isNotificationsEnabled() async {
+    return await _hiveService.getSetting<bool>('notifications_enabled') ?? true;
+  }
+
+  @override
+  Future<void> setNotificationsEnabled(bool value) async {
+    await _hiveService.setSetting('notifications_enabled', value);
+  }
+
+  @override
   Future<AppLanguage> getLanguage() async {
     final hiveValue = await _hiveService.getSetting<int>('language');
     return AppLanguage.fromHiveValue(hiveValue);

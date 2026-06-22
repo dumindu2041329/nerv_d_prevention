@@ -15,6 +15,10 @@ class ToggleDarkMode extends SettingsEvent {
   const ToggleDarkMode();
 }
 
+class ToggleNotifications extends SettingsEvent {
+  const ToggleNotifications();
+}
+
 class SetLanguage extends SettingsEvent {
   final AppLanguage language;
 

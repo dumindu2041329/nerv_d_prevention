@@ -1,5 +1,8 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
+import '../../../core/constants/weather_codes.dart';
+import '../../../core/notifications/local_notification_service.dart';
+import '../../../core/utils/weather_alert_deriver.dart';
 import '../../../domain/entities/weather_data.dart';
 import '../../../domain/entities/location.dart';
 import '../../../domain/repositories/weather_repository.dart';
@@ -9,10 +12,14 @@ part 'weather_state.dart';
 
 class WeatherBloc extends Bloc<WeatherEvent, WeatherState> {
   final WeatherRepository _weatherRepository;
+  final LocalNotificationService _notificationService;
 
-  WeatherBloc({required WeatherRepository weatherRepository})
-    : _weatherRepository = weatherRepository,
-      super(WeatherInitial()) {
+  WeatherBloc({
+    required WeatherRepository weatherRepository,
+    required LocalNotificationService notificationService,
+  }) : _weatherRepository = weatherRepository,
+       _notificationService = notificationService,
+       super(WeatherInitial()) {
     on<LoadWeather>(_onLoadWeather);
     on<_FetchWeatherInBackground>(_onFetchWeatherInBackground);
     on<RefreshWeather>(_onRefreshWeather);
@@ -75,6 +82,11 @@ class WeatherBloc extends Bloc<WeatherEvent, WeatherState> {
           isStaleCache: false,
         ),
       );
+
+      // After successfully emitting the new forecast, surface any
+      // newly-discovered upcoming Critical/Emergency/Warning timeline
+      // events as OS notifications (when notifications are enabled).
+      _notifyTimelineEvents(weatherData, location);
     } catch (e) {
       final currentState = state;
       if (currentState is WeatherLoaded) {
@@ -109,6 +121,10 @@ class WeatherBloc extends Bloc<WeatherEvent, WeatherState> {
             isStaleCache: false,
           ),
         );
+
+        // Same as above: surface newly-discovered upcoming severe
+        // timeline events as OS notifications after a manual refresh.
+        _notifyTimelineEvents(weatherData, currentState.location);
       } catch (e) {
         emit(
           WeatherLoaded(
@@ -162,5 +178,73 @@ class WeatherBloc extends Bloc<WeatherEvent, WeatherState> {
     Emitter<WeatherState> emit,
   ) async {
     add(LoadWeather(location: event.location, forceRefresh: true));
+  }
+
+  /// Derive timeline events from the freshly-loaded [weatherData] and
+  /// forward them to the notification service. Failures are swallowed
+  /// so a notification hiccup never breaks the bloc. [location] may
+  /// be null on manual refresh paths; in that case we fall back to
+  /// the bloc's current state location.
+  void _notifyTimelineEvents(WeatherData weatherData, Location? location) {
+    final effectiveLocation = location ?? _currentLocationOrNull();
+    if (effectiveLocation == null) return;
+    try {
+      final events = WeatherAlertDeriver.deriveTimelineEvents(
+        weatherData,
+        districtName: effectiveLocation.name,
+        realLatitude: effectiveLocation.latitude,
+        realLongitude: effectiveLocation.longitude,
+      );
+      // Fire-and-forget; the service itself is idempotent and dedups.
+      _notificationService.notifyIfNewTimelineEvent(events);
+
+      // Also fire a single digest notification so users see a real
+      // device toast even when nothing severe is on the timeline.
+      _notifyCurrentConditionsDigest(
+        weatherData,
+        effectiveLocation,
+        events,
+      );
+    } catch (_) {
+      // Intentionally ignored — notifications are best-effort.
+    }
+  }
+
+  /// Build a digest notification payload from the fresh weather and
+  /// derived alerts, then hand it to the service.
+  void _notifyCurrentConditionsDigest(
+    WeatherData weatherData,
+    Location location,
+    List<dynamic> events,
+  ) {
+    try {
+      final current = weatherData.current;
+      final conditionsLabel = WeatherCodeMapping.getDescription(
+        current.weatherCode,
+        isDay: current.isDay,
+      );
+      final nonCalm = events
+          .where((e) => (e.severity.name as String) != 'calm')
+          .toList();
+      final headline = nonCalm.isEmpty
+          ? null
+          : (nonCalm.first.title as String?);
+
+      _notificationService.notifyCurrentConditionsDigest(
+        locationName: location.name,
+        temperatureC: current.temperature,
+        conditionsLabel: conditionsLabel,
+        nonCalmAlertCount: nonCalm.length,
+        topAlertHeadline: headline,
+      );
+    } catch (_) {
+      // Best-effort.
+    }
+  }
+
+  Location? _currentLocationOrNull() {
+    final s = state;
+    if (s is WeatherLoaded) return s.location;
+    return null;
   }
 }
