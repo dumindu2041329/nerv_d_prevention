@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/localization/app_localizations.dart';
 import '../../blocs/settings/settings_bloc.dart';
@@ -224,7 +225,6 @@ class MenuScreen extends StatelessWidget {
           ),
         ),
         _buildNotificationsToggle(context, state),
-        _buildMenuItem(context, 'Widget Settings'),
       ],
     );
   }
@@ -241,7 +241,7 @@ class MenuScreen extends StatelessWidget {
           trailing: '1.0.0',
           showChevron: false,
         ),
-        _buildMenuItem(context, 'Contact Us'),
+        _buildMenuItem(context, 'Contact Us', onTap: () => context.push('/contact-us')),
       ],
     );
   }

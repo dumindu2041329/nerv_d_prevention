@@ -7,6 +7,7 @@ import '../../presentation/screens/timeline/timeline_screen.dart';
 import '../../presentation/screens/timeline/timeline_event_detail_screen.dart';
 import '../../presentation/screens/weather/weather_screen.dart';
 import '../../presentation/screens/menu/menu_screen.dart';
+import '../../presentation/screens/contact/contact_us_screen.dart';
 import '../../presentation/screens/weather_detail/weather_detail_screen.dart';
 import '../../presentation/widgets/main_scaffold.dart';
 
@@ -60,6 +61,11 @@ class AppRouter {
         path: '/weather-detail',
         parentNavigatorKey: _rootNavigatorKey,
         builder: (context, state) => const WeatherDetailScreen(),
+      ),
+      GoRoute(
+        path: '/contact-us',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => const ContactUsScreen(),
       ),
       GoRoute(
         path: '/timeline-event-detail',

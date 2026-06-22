@@ -10,6 +10,7 @@ import '../../../core/constants/app_sl_constants.dart';
 import '../../../core/constants/weather_codes.dart';
 import '../../../core/utils/date_time_utils.dart';
 import '../../../data/remote/landslides/landslide_api_client.dart';
+import '../../../data/remote/landslides/landslide_polygon_client.dart';
 import '../../../domain/entities/weather_data.dart';
 import '../../blocs/weather/weather_bloc.dart';
 import 'select_layer_sheet.dart';
@@ -35,6 +36,7 @@ class _MapScreenState extends State<MapScreen> {
   _HazardTab _hazardTab = _HazardTab.rain;
   late String _hazardDisplayedTime;
   List<_HazardPoint> _landslidePoints = const [];
+  List<_LandslidePolygonItem> _landslidePolygons = const [];
   bool _landslideLoading = false;
 
   @override
@@ -61,7 +63,13 @@ class _MapScreenState extends State<MapScreen> {
     if (_landslideLoading) return;
     setState(() => _landslideLoading = true);
     final client = getIt<LandslideApiClient>();
-    final features = await client.getSriLankaLandslides();
+    final polygonClient = getIt<LandslidePolygonClient>();
+    final results = await Future.wait<Object>([
+      client.getSriLankaLandslides(),
+      polygonClient.getSriLankaPolygons(),
+    ]);
+    final features = results[0] as List<LandslideFeature>;
+    final polygons = results[1] as List<LandslidePolygon>;
     if (!mounted) return;
     setState(() {
       _landslideLoading = false;
@@ -73,6 +81,14 @@ class _MapScreenState extends State<MapScreen> {
                   ))
               .toList()
           : const [];
+      _landslidePolygons = polygons
+          .map((p) => _LandslidePolygonItem(
+                p.ring,
+                _severityFromString(p.severity),
+                p.name,
+                p.source,
+              ))
+          .toList();
     });
   }
 
@@ -807,18 +823,40 @@ class _MapScreenState extends State<MapScreen> {
 
   Widget _buildHazardRiskLayer() {
     if (_hazardTab != _HazardTab.landslide) return const SizedBox.shrink();
-    if (_landslidePoints.isEmpty) return const SizedBox.shrink();
-    return CircleLayer(
-      circles: _landslidePoints.map((p) {
-        return CircleMarker(
-          point: p.location,
-          radius: 7,
-          useRadiusInMeter: false,
-          color: p.severity.color.withValues(alpha: 0.9),
-          borderColor: p.severity.color,
-          borderStrokeWidth: 1.5,
-        );
-      }).toList(),
+    return Stack(
+      children: [
+        if (_landslidePolygons.isNotEmpty)
+          PolygonLayer(
+            polygons: _landslidePolygons
+                .map((p) => Polygon(
+                      points: p.ring,
+                      color: p.severity.color.withValues(alpha: 0.22),
+                      borderColor: p.severity.color.withValues(alpha: 0.85),
+                      borderStrokeWidth: 1.5,
+                      label: p.name,
+                      labelStyle: TextStyle(
+                        color: p.severity.color,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ))
+                .toList(),
+            polygonLabels: true,
+          ),
+        if (_landslidePoints.isNotEmpty)
+          CircleLayer(
+            circles: _landslidePoints.map((p) {
+              return CircleMarker(
+                point: p.location,
+                radius: 7,
+                useRadiusInMeter: false,
+                color: p.severity.color.withValues(alpha: 0.9),
+                borderColor: p.severity.color,
+                borderStrokeWidth: 1.5,
+              );
+            }).toList(),
+          ),
+      ],
     );
   }
 
@@ -1220,6 +1258,14 @@ class _HazardPoint {
   final LatLng location;
   final _Severity severity;
   const _HazardPoint(this.location, this.severity);
+}
+
+class _LandslidePolygonItem {
+  final List<LatLng> ring;
+  final _Severity severity;
+  final String name;
+  final String source;
+  const _LandslidePolygonItem(this.ring, this.severity, this.name, this.source);
 }
 
 _Severity _severityFromString(String s) {

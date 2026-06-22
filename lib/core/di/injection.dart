@@ -1,7 +1,9 @@
 import 'package:get_it/get_it.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import '../../data/remote/alerts/sos_alert_api_client.dart';
+import '../../data/remote/contact/contact_api_client.dart';
 import '../../data/remote/landslides/landslide_api_client.dart';
+import '../../data/remote/landslides/landslide_polygon_client.dart';
 import '../../data/remote/weatherapi/weather_api_client.dart';
 import '../../data/remote/maptiler/maptiler_geocoding_client.dart';
 import '../../data/repositories/alert_repository_impl.dart';
@@ -28,7 +30,9 @@ Future<void> initDependencies() async {
   getIt.registerSingleton<WeatherApiClient>(WeatherApiClient());
   getIt.registerSingleton<MaptilerGeocodingClient>(MaptilerGeocodingClient());
   getIt.registerSingleton<LandslideApiClient>(LandslideApiClient());
+  getIt.registerSingleton<LandslidePolygonClient>(LandslidePolygonClient());
   getIt.registerSingleton<SosAlertApiClient>(SosAlertApiClient());
+  getIt.registerSingleton<ContactApiClient>(ContactApiClient());
 
   getIt.registerSingleton<WeatherRepository>(
     WeatherRepositoryImpl(
