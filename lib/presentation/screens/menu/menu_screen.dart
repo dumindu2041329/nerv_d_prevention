@@ -1,3 +1,4 @@
+import 'package:clerk_flutter/clerk_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -25,6 +26,7 @@ class MenuScreen extends StatelessWidget {
                 _buildColorStripe(),
                 _buildSavedRegions(context),
                 const SizedBox(height: 16),
+                _buildAccountSection(context, l10n),
                 _buildSettingsSection(context, state, l10n),
                 _buildAboutSection(context, l10n),
                 _buildFooter(context, l10n),
@@ -164,6 +166,34 @@ class MenuScreen extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildAccountSection(BuildContext context, AppLocalizations l10n) {
+    final theme = Theme.of(context);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionTitle(context, 'Account'),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Signed in account',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontSize: 15,
+                    color: theme.colorScheme.onSurface,
+                  ),
+                ),
+              ),
+              const ClerkUserButton(),
+            ],
+          ),
+        ),
+      ],
     );
   }
 

@@ -5,6 +5,8 @@ class ApiConstants {
   static String get mapTilerApiKey => dotenv.get('MAPTILER_API_KEY');
   static String get owmApiKey => dotenv.get('OWM_API_KEY');
   static String get weatherApiKey => dotenv.get('WEATHERAPI_KEY');
+  static String get clerkPublishableKey =>
+      dotenv.get('CLERK_PUBLISHABLE_KEY', fallback: '');
 
   static const String weatherApiBaseUrl = 'https://api.weatherapi.com/v1';
   static const String mapTilerGeocodingBaseUrl = 'https://api.maptiler.com/geocoding';

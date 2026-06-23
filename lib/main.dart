@@ -1,7 +1,9 @@
+import 'package:clerk_flutter/clerk_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'core/constants/app_constants.dart';
 import 'core/di/injection.dart';
 import 'core/router/app_router.dart';
 import 'core/localization/app_localizations.dart';
@@ -50,26 +52,63 @@ class NERVApp extends StatelessWidget {
         builder: (context, settingsState) {
           return AppLocalizationScope(
             localizations: AppLocalizations(settingsState.language),
-            child: MaterialApp.router(
-              title: 'NERV Disaster Prevention',
-              debugShowCheckedModeBanner: false,
-              theme: AppTheme.lightTheme(
-                textSizeScale: settingsState.textSizeScale,
-                fontWeightScale: settingsState.fontWeightScale,
+            child: ClerkAuth(
+              config: ClerkAuthConfig(
+                publishableKey: ApiConstants.clerkPublishableKey,
               ),
-              darkTheme: AppTheme.darkTheme(
-                visionMode: settingsState.colourVisionMode,
-                contrast: settingsState.contrastMode,
-                textSizeScale: settingsState.textSizeScale,
-                fontWeightScale: settingsState.fontWeightScale,
+              child: ClerkErrorListener(
+                child: ClerkAuthBuilder(
+                  signedInBuilder: (context, authState) =>
+                      _buildSignedInApp(settingsState),
+                  signedOutBuilder: (context, authState) =>
+                      _buildSignedOutApp(settingsState),
+                ),
               ),
-              themeMode: settingsState.isDarkMode
-                  ? ThemeMode.dark
-                  : ThemeMode.light,
-              routerConfig: AppRouter.router,
             ),
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildSignedInApp(SettingsState settingsState) {
+    return MaterialApp.router(
+      title: 'NERV Disaster Prevention',
+      debugShowCheckedModeBanner: false,
+      theme: AppTheme.lightTheme(
+        textSizeScale: settingsState.textSizeScale,
+        fontWeightScale: settingsState.fontWeightScale,
+      ),
+      darkTheme: AppTheme.darkTheme(
+        visionMode: settingsState.colourVisionMode,
+        contrast: settingsState.contrastMode,
+        textSizeScale: settingsState.textSizeScale,
+        fontWeightScale: settingsState.fontWeightScale,
+      ),
+      themeMode:
+          settingsState.isDarkMode ? ThemeMode.dark : ThemeMode.light,
+      routerConfig: AppRouter.router,
+    );
+  }
+
+  Widget _buildSignedOutApp(SettingsState settingsState) {
+    return MaterialApp(
+      title: 'NERV Disaster Prevention',
+      debugShowCheckedModeBanner: false,
+      theme: AppTheme.lightTheme(
+        textSizeScale: settingsState.textSizeScale,
+        fontWeightScale: settingsState.fontWeightScale,
+      ),
+      darkTheme: AppTheme.darkTheme(
+        visionMode: settingsState.colourVisionMode,
+        contrast: settingsState.contrastMode,
+        textSizeScale: settingsState.textSizeScale,
+        fontWeightScale: settingsState.fontWeightScale,
+      ),
+      themeMode:
+          settingsState.isDarkMode ? ThemeMode.dark : ThemeMode.light,
+      home: const Scaffold(
+        body: SafeArea(child: ClerkAuthentication()),
       ),
     );
   }
