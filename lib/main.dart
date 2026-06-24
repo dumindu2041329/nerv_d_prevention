@@ -1,4 +1,8 @@
+import 'dart:async';
+import 'dart:ui';
+
 import 'package:clerk_flutter/clerk_flutter.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -12,26 +16,47 @@ import 'presentation/blocs/alerts/alert_bloc.dart';
 import 'presentation/blocs/settings/settings_bloc.dart';
 
 void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+  // runZonedGuarded catches every uncaught async error in the app — without
+  // this, any stray future error would surface as a red stack trace in
+  // debug builds and a silent crash in release.
+  await runZonedGuarded<Future<void>>(() async {
+    WidgetsFlutterBinding.ensureInitialized();
 
-  await dotenv.load(fileName: '.env');
-  await initDependencies();
+    // Catch synchronous Flutter framework errors (build/layout/paint).
+    FlutterError.onError = (details) {
+      FlutterError.presentError(details);
+      debugPrint('FlutterError: ${details.exceptionAsString()}');
+      if (details.stack != null) debugPrint('${details.stack}');
+    };
 
-  SystemChrome.setSystemUIOverlayStyle(
-    const SystemUiOverlayStyle(
-      statusBarColor: Colors.transparent,
-      statusBarIconBrightness: Brightness.light,
-      systemNavigationBarColor: Color(0xFF000000),
-      systemNavigationBarIconBrightness: Brightness.light,
-    ),
-  );
+    // Catch errors that escape the Flutter framework (platform channels,
+    // async callbacks, native interop, etc.).
+    PlatformDispatcher.instance.onError = (error, stack) {
+      debugPrint('PlatformDispatcher error: $error\n$stack');
+      return true; // mark as handled so the engine doesn't kill the isolate
+    };
 
-  await SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
-    DeviceOrientation.portraitDown,
-  ]);
+    await dotenv.load(fileName: '.env');
+    await initDependencies();
 
-  runApp(const NERVApp());
+    SystemChrome.setSystemUIOverlayStyle(
+      const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.light,
+        systemNavigationBarColor: Color(0xFF000000),
+        systemNavigationBarIconBrightness: Brightness.light,
+      ),
+    );
+
+    await SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+    ]);
+
+    runApp(const NERVApp());
+  }, (error, stack) {
+    debugPrint('Uncaught zone error: $error\n$stack');
+  });
 }
 
 class NERVApp extends StatelessWidget {
