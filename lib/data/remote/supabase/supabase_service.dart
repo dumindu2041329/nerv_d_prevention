@@ -22,7 +22,7 @@ class SupabaseService {
   /// Construct the public URL for an Edge Function invocation.
   ///
   ///   functionUrl('weather') =>
-  ///     'https://<project>.supabase.co/functions/v1/weather'
+  ///     'https://{project-ref}.supabase.co/functions/v1/weather'
   String functionUrl(String functionName) {
     final base = baseUrl.replaceAll(RegExp(r'/+$'), '');
     return '$base/functions/v1/$functionName';
@@ -46,7 +46,7 @@ class SupabaseService {
 
     await Supabase.initialize(
       url: url,
-      anonKey: anonKey,
+      publishableKey: anonKey,
       // Realtime uses long-lived websockets. The default settings work
       // for mobile, but we explicitly disable debug logs in release.
       debug: false,

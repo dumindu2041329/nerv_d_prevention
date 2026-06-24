@@ -179,6 +179,8 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
               initialZoom: _isIslandWide ? SLMapConstants.initialZoom : 12.0,
               minZoom: SLMapConstants.minZoom,
               maxZoom: SLMapConstants.maxZoom,
+              // Crop vertical whitespace (Arctic ↔ Antarctica).
+              cameraConstraint: CameraConstraint.containLatitude(),
               interactionOptions: const InteractionOptions(
                 flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
               ),

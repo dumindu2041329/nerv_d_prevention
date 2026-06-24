@@ -47,6 +47,8 @@ class _WeatherScreenState extends State<WeatherScreen> {
                   initialZoom: SLMapConstants.initialZoom,
                   minZoom: SLMapConstants.minZoom,
                   maxZoom: SLMapConstants.maxZoom,
+                  // Crop vertical whitespace (Arctic ↔ Antarctica).
+                  cameraConstraint: CameraConstraint.containLatitude(),
                   interactionOptions: const InteractionOptions(
                     flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
                   ),

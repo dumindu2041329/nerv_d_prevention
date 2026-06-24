@@ -275,6 +275,15 @@ class _MapScreenState extends State<MapScreen> {
                     initialZoom: _currentZoom,
                     minZoom: SLMapConstants.minZoom,
                     maxZoom: SLMapConstants.maxZoom,
+                    // Crop vertical whitespace so the map's top edge never
+                    // exceeds the Arctic (90°N) and the bottom edge never
+                    // exceeds Antarctica (-90°S). These are the defaults
+                    // of `containLatitude`, and they're the exact reason
+                    // this helper exists ("prevent the background color
+                    // from appearing at the 'top' and 'bottom' of the
+                    // typical map"). Horizontal panning stays free.
+                    cameraConstraint:
+                        CameraConstraint.containLatitude(),
                     onPositionChanged: (position, hasGesture) {
                       if (hasGesture) {
                         setState(() {
