@@ -70,10 +70,8 @@ class _ContactUsScreenState extends State<ContactUsScreen> {
     if (!mounted) return;
     setState(() => _sending = false);
     if (ok) {
-      _showSnack(
-        'Opening your mail app — tap Send there to deliver the message.',
-      );
-      // Reset form on successful handoff so the user starts fresh if
+      _showSnack('Message sent. We will reply to your email shortly.');
+      // Reset form on successful send so the user starts fresh if
       // they navigate back and open Contact Us again.
       _formKey.currentState?.reset();
       _nameController.clear();
@@ -82,7 +80,7 @@ class _ContactUsScreenState extends State<ContactUsScreen> {
       _messageController.clear();
     } else {
       _showSnack(
-        'No mail app available. Please email '
+        'Could not send message. Please try again or email '
         '${ContactApiClient.supportEmail} directly.',
       );
     }

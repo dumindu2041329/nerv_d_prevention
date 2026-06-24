@@ -2,12 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class ApiConstants {
-  static String get mapTilerApiKey => dotenv.get('MAPTILER_API_KEY');
-  static String get owmApiKey => dotenv.get('OWM_API_KEY');
-  static String get weatherApiKey => dotenv.get('WEATHERAPI_KEY');
+  // API keys for weather + map providers are no longer stored in the
+  // client. They live as Supabase Secrets and are accessed only by
+  // Edge Functions. Keep Clerk publishable key here (it's designed to
+  // be public).
   static String get clerkPublishableKey =>
       dotenv.get('CLERK_PUBLISHABLE_KEY', fallback: '');
 
+  // Upstream provider URLs are retained for documentation only.
+  // All client traffic now flows through Supabase Edge Functions.
   static const String weatherApiBaseUrl = 'https://api.weatherapi.com/v1';
   static const String mapTilerGeocodingBaseUrl = 'https://api.maptiler.com/geocoding';
   static const String overpassBaseUrl = 'https://overpass-api.de/api/interpreter';
@@ -17,27 +20,34 @@ class ApiConstants {
   static const Duration hourlyForecastCacheTtl = Duration(hours: 1);
   static const Duration dailyForecastCacheTtl = Duration(hours: 3);
 
-  static String get mapTileHybrid =>
-      'https://api.maptiler.com/maps/hybrid/{z}/{x}/{y}.jpg?key=$mapTilerApiKey';
+  // ---------------------------------------------------------------------------
+  // Map tile URLs — proxied through Supabase so provider keys stay server-side.
+  //   The Supabase `tiles` Edge Function (supabase/functions/tiles/index.ts)
+  //   reads MAPTILER_API_KEY / OWM_API_KEY from Supabase Secrets and forwards
+  //   the request. Tile responses are CDN-cached for 1 hour.
+  // ---------------------------------------------------------------------------
 
-  static String get owmPrecipitationOverlay =>
-      'https://tile.openweathermap.org/map/precipitation_new/{z}/{x}/{y}.png?appid=$owmApiKey';
+  static String get _supabaseBase =>
+      dotenv.get('SUPABASE_URL').replaceAll(RegExp(r'/+$'), '');
+
+  /// MapTiler hybrid basemap URL template. The `{z}/{x}/{y}` placeholders are
+  /// substituted by `flutter_map` per tile.
+  static String get mapTileHybrid =>
+      '$_supabaseBase/functions/v1/tiles/maptiler/hybrid/{z}/{x}/{y}';
 
   // OWM tile layer variants used for the Select Layer map overlays.
+  static String get owmPrecipitationOverlay =>
+      '$_supabaseBase/functions/v1/tiles/owm/precipitation_new/{z}/{x}/{y}';
   static String get owmCloudsOverlay =>
-      'https://tile.openweathermap.org/map/clouds_new/{z}/{x}/{y}.png?appid=$owmApiKey';
-
+      '$_supabaseBase/functions/v1/tiles/owm/clouds_new/{z}/{x}/{y}';
   static String get owmTempOverlay =>
-      'https://tile.openweathermap.org/map/temp_new/{z}/{x}/{y}.png?appid=$owmApiKey';
-
+      '$_supabaseBase/functions/v1/tiles/owm/temp_new/{z}/{x}/{y}';
   static String get owmWindOverlay =>
-      'https://tile.openweathermap.org/map/wind_new/{z}/{x}/{y}.png?appid=$owmApiKey';
-
+      '$_supabaseBase/functions/v1/tiles/owm/wind_new/{z}/{x}/{y}';
   static String get owmSnowOverlay =>
-      'https://tile.openweathermap.org/map/snow_new/{z}/{x}/{y}.png?appid=$owmApiKey';
-
+      '$_supabaseBase/functions/v1/tiles/owm/snow_new/{z}/{x}/{y}';
   static String get owmPressureOverlay =>
-      'https://tile.openweathermap.org/map/pressure_new/{z}/{x}/{y}.png?appid=$owmApiKey';
+      '$_supabaseBase/functions/v1/tiles/owm/pressure_new/{z}/{x}/{y}';
 }
 
 class AppConstants {

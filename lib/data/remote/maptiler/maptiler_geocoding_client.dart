@@ -1,45 +1,46 @@
-import 'package:dio/dio.dart';
-import '../../../core/constants/app_constants.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../domain/entities/location.dart';
 
+/// Calls the `geocode` Supabase Edge Function, which proxies the
+/// MapTiler Geocoding API. The MapTiler key lives in Supabase Secrets
+/// and is never bundled in the APK.
+///
+/// See `supabase/functions/geocode/index.ts`.
 class MaptilerGeocodingClient {
-  late final Dio _dio;
+  final SupabaseClient _client;
 
-  MaptilerGeocodingClient() {
-    _dio = Dio(BaseOptions(
-      baseUrl: ApiConstants.mapTilerGeocodingBaseUrl,
-      connectTimeout: const Duration(seconds: 10),
-      receiveTimeout: const Duration(seconds: 10),
-    ));
-  }
+  MaptilerGeocodingClient({SupabaseClient? client})
+      : _client = client ?? Supabase.instance.client;
 
   /// Forward geocoding: search by place name.
   Future<List<Location>> searchLocations(String query) async {
     try {
-      final response = await _dio.get(
-        '/${Uri.encodeComponent(query)}.json',
-        queryParameters: {'key': ApiConstants.mapTilerApiKey, 'limit': 5},
+      final response = await _client.functions.invoke(
+        'geocode',
+        body: {'q': query, 'limit': 5},
       );
-      return _parseFeatures(response.data);
-    } catch (e) {
-      return [];
+      if (response.status != 200) return const [];
+      final data = response.data;
+      if (data is! Map<String, dynamic>) return const [];
+      return _parseFeatures(data);
+    } catch (_) {
+      return const [];
     }
   }
 
   /// Reverse geocoding: coordinates → place name.
   Future<Location?> reverseGeocode(double latitude, double longitude) async {
     try {
-      final response = await _dio.get(
-        '/$longitude,$latitude.json',
-        queryParameters: {
-          'key': ApiConstants.mapTilerApiKey,
-          'limit': 1,
-          'types': 'municipality,locality,place',
-        },
+      final response = await _client.functions.invoke(
+        'geocode',
+        body: {'latitude': latitude, 'longitude': longitude},
       );
-      final features = _parseFeatures(response.data);
+      if (response.status != 200) return null;
+      final data = response.data;
+      if (data is! Map<String, dynamic>) return null;
+      final features = _parseFeatures(data);
       return features.isNotEmpty ? features.first : null;
-    } catch (e) {
+    } catch (_) {
       return null;
     }
   }

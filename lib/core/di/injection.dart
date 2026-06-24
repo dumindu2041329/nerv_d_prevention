@@ -6,6 +6,7 @@ import '../../data/remote/landslides/landslide_api_client.dart';
 import '../../data/remote/landslides/landslide_polygon_client.dart';
 import '../../data/remote/weatherapi/weather_api_client.dart';
 import '../../data/remote/maptiler/maptiler_geocoding_client.dart';
+import '../../data/remote/supabase/supabase_service.dart';
 import '../../data/repositories/alert_repository_impl.dart';
 import '../../data/repositories/weather_repository_impl.dart';
 import '../../data/repositories/settings_repository_impl.dart';
@@ -21,12 +22,24 @@ import '../notifications/local_notification_service.dart';
 final getIt = GetIt.instance;
 
 Future<void> initDependencies() async {
-  await Hive.initFlutter();
+  // 1) Supabase must be initialised before any service that depends on it.
+  //    We do this first so that the singleton [SupabaseService] and
+  //    [SupabaseClient] are available to all subsequent registrations.
+  final supabaseService = SupabaseService();
+  await supabaseService.init();
+  getIt.registerSingleton<SupabaseService>(supabaseService);
 
+  // 2) Local cache (Hive) — unchanged from before the migration.
+  await Hive.initFlutter();
   final hiveService = HiveService();
   await hiveService.init();
   getIt.registerSingleton<HiveService>(hiveService);
 
+  // 3) API clients — all now route through Supabase Edge Functions.
+  //    The legacy Dio clients (LandslideApiClient, LandslidePolygonClient,
+  //    SosAlertApiClient) keep their direct-upstream calls because their
+  //    sources are key-less or have their own terms. Wrap them in a
+  //    Supabase proxy later if rate-limiting becomes a concern.
   getIt.registerSingleton<WeatherApiClient>(WeatherApiClient());
   getIt.registerSingleton<MaptilerGeocodingClient>(MaptilerGeocodingClient());
   getIt.registerSingleton<LandslideApiClient>(LandslideApiClient());
@@ -34,6 +47,8 @@ Future<void> initDependencies() async {
   getIt.registerSingleton<SosAlertApiClient>(SosAlertApiClient());
   getIt.registerSingleton<ContactApiClient>(ContactApiClient());
 
+  // 4) Repositories — unchanged signatures; only the underlying clients
+  //    now talk to Supabase.
   getIt.registerSingleton<WeatherRepository>(
     WeatherRepositoryImpl(
       client: getIt<WeatherApiClient>(),

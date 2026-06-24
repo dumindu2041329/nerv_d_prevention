@@ -1,0 +1,55 @@
+project_id = "ebccdpydoptajlkmqefx"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "storage", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+major_version = 15
+
+[studio]
+enabled = true
+port = 54323
+api_url = "http://127.0.0.1"
+
+[inbucket]
+enabled = true
+port = 54324
+
+[storage]
+enabled = true
+file_size_limit = "50MiB"
+
+[auth]
+enabled = false
+# Clerk handles auth — Supabase auth is intentionally disabled.
+
+[auth.email]
+enable_signup = false
+enable_confirmations = false
+
+[edge_runtime]
+enabled = true
+inspector_port = 8083
+
+[functions]
+# Per-function settings live under [functions.<name>] below.
+# (The old `verify_jwt = false` at this top level is rejected by Supabase CLI 2.x
+# which expects a map. See https://supabase.com/docs/guides/functions/local-development)
+
+[functions.alert-aggregator]
+verify_jwt = false
+# Called by Supabase Cron with the service role key, not by clients.
+
+[functions.crisis-pins]
+verify_jwt = false
+# Public POST (anon-key) for community-submitted pins. Public GET too.
+
+[analytics]
+enabled = false
+# Privacy-first — no analytics tracking.

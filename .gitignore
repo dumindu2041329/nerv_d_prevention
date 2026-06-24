@@ -33,6 +33,9 @@ migrate_working_dir/
 /build/
 /coverage/
 
+# Node.js (e.g. typescript install for supabase/functions type-check)
+/node_modules/
+
 # Environment variables (contains API keys)
 /.env
 /backend/.env

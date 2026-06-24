@@ -63,6 +63,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           signedInBuilder: (context, authState) {
             final user = authState.user;
             final emails = user?.emailAddresses ?? const <clerk.Email>[];
+            final hasPassword = user?.passwordEnabled == true;
 
             return AbsorbPointer(
               absorbing: _busy,
@@ -76,21 +77,34 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     emails,
                   ),
                   const SizedBox(height: AppSpacing.space4),
-                  _buildActionTile(
-                    context,
-                    theme,
-                    icon: Icons.lock_outline,
-                    title: 'Change Password',
-                    subtitle: _passwordSubtitle(emails),
-                    onTap: _busy
-                        ? null
-                        : () => _changePassword(
-                              authState,
-                              user?.primaryEmailAddressId == null
-                                  ? null
-                                  : user?.email,
-                            ),
-                  ),
+                  // Password is only editable in-app when the account
+                  // already has one. Social-login-only accounts can't
+                  // have a password added from the Frontend API
+                  // (Clerk's `updateUserPassword` requires the current
+                  // password and the SDK exposes no `addPassword`).
+                  // We show a one-liner explaining the situation
+                  // instead of a broken button.
+                  if (hasPassword)
+                    _buildActionTile(
+                      context,
+                      theme,
+                      icon: Icons.lock_outline,
+                      title: 'Change Password',
+                      subtitle: 'Update your password using your current one',
+                      onTap: _busy ? null : () => _changePassword(authState),
+                    )
+                  else
+                    _buildInfoTile(
+                      context,
+                      theme,
+                      icon: Icons.lock_open,
+                      title: 'Password not set',
+                      subtitle:
+                          'This account was created with a social login. '
+                          'Sign out and create a new account with an email '
+                          'and password, then link it from the same email '
+                          'address to keep your data.',
+                    ),
                   const SizedBox(height: AppSpacing.space6),
                   _buildSignOutButton(context, theme),
                 ],
@@ -420,6 +434,67 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  /// Read-only row used for informational entries (e.g. "Password not
+  /// set" for social-login accounts). Same look as [_buildActionTile]
+  /// minus the chevron and the tappable feedback, so the user can tell
+  /// the row is not interactive.
+  Widget _buildInfoTile(
+    BuildContext context,
+    ThemeData theme, {
+    required IconData icon,
+    required String title,
+    required String subtitle,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.space4,
+        vertical: AppSpacing.space4,
+      ),
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.06),
+            width: 0.5,
+          ),
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            icon,
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+            size: 22,
+          ),
+          const SizedBox(width: AppSpacing.space4),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  title,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontSize: 15,
+                    color: theme.colorScheme.onSurface,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    fontSize: 12,
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildSignOutButton(BuildContext context, ThemeData theme) {
     return SizedBox(
       width: double.infinity,
@@ -443,13 +518,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
       ),
     );
-  }
-
-  String _passwordSubtitle(List<clerk.Email> emails) {
-    if (emails.isEmpty) {
-      return 'Add an email first to enable password reset';
-    }
-    return 'Send a password reset link to your email';
   }
 
   // ---------------------------------------------------------------------------
@@ -780,60 +848,65 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   // ---------------------------------------------------------------------------
-  // Password reset flow
+  // Password change flow
   // ---------------------------------------------------------------------------
 
-  Future<void> _changePassword(
-    ClerkAuthState authState,
-    String? email,
-  ) async {
+  /// Shows the in-app change-password form and, on submit, calls Clerk's
+  /// `updateUserPassword` to swap the password immediately. No email
+  /// verification code is involved. Only available for accounts that
+  /// already have a password (i.e. not social-login-only accounts).
+  Future<void> _changePassword(ClerkAuthState authState) async {
     final messenger = ScaffoldMessenger.of(context);
-    if (email == null) {
-      _snack(messenger, 'No email on file to send a reset link to.');
-      return;
-    }
 
-    final confirmed = await _confirmResetPassword(email);
-    if (confirmed != true) return;
+    final result = await _ChangePasswordDialog.show(context);
+    if (result == null) return;
 
+    // Defer the setState until after the dialog has fully torn down
+    // (same reason as `_addEmail`).
+    await _awaitNextFrame();
+    if (!mounted) return;
     setState(() => _busy = true);
+
     try {
-      await authState.initiatePasswordReset(
-        identifier: email,
-        strategy: clerk.Strategy.resetPasswordEmailCode,
+      await authState.updateUserPassword(
+        result.currentPassword,
+        result.newPassword,
       );
-      _snack(messenger, 'Password reset link sent to $email. Check your inbox.');
+      if (!mounted) return;
+      _snack(messenger, 'Password updated.');
     } on clerk.ClerkError catch (e) {
-      debugPrint('initiatePasswordReset ClerkError: ${e.message}');
-      _snack(messenger, 'Could not send the reset link: ${e.message}');
+      debugPrint('updateUserPassword ClerkError: ${e.message}');
+      if (mounted) {
+        _snack(
+          messenger,
+          _friendlyPasswordError(e),
+        );
+      }
     } catch (e, st) {
-      debugPrint('initiatePasswordReset error: $e\n$st');
-      _snack(messenger, 'Could not send the reset link. Please try again.');
+      debugPrint('updateUserPassword error: $e\n$st');
+      if (mounted) {
+        _snack(messenger, 'Could not update your password. Please try again.');
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
   }
 
-  Future<bool?> _confirmResetPassword(String email) {
-    return showDialog<bool>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('Reset password?'),
-          content: Text("We'll send a password reset link to:\n\n$email"),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: const Text('Send Link'),
-            ),
-          ],
-        );
-      },
-    );
+  /// Maps common ClerkError codes for password update to user-friendly
+  /// messages. Falls back to the raw Clerk message if the code isn't
+  /// recognised.
+  String _friendlyPasswordError(clerk.ClerkError e) {
+    final msg = e.message.toLowerCase();
+    if (msg.contains('current password') || msg.contains('incorrect')) {
+      return 'Current password is incorrect.';
+    }
+    if (msg.contains('too short') || msg.contains('password length')) {
+      return 'New password is too short.';
+    }
+    if (msg.contains('same as') || msg.contains('identical')) {
+      return 'New password must be different from the current one.';
+    }
+    return 'Could not update your password: ${e.message}';
   }
 
   // ---------------------------------------------------------------------------
@@ -1026,6 +1099,219 @@ class _Badge extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Modal dialog that asks for the current password, a new password,
+/// and a confirmation. Returns a [_ChangePasswordResult] on success, or
+/// `null` if cancelled. No email verification is involved — the change
+/// is applied immediately via Clerk's `updateUserPassword`.
+class _ChangePasswordDialog extends StatefulWidget {
+  const _ChangePasswordDialog();
+
+  /// Convenience launcher so the State can stay private.
+  static Future<_ChangePasswordResult?> show(BuildContext context) {
+    return showDialog<_ChangePasswordResult>(
+      context: context,
+      builder: (_) => const _ChangePasswordDialog(),
+    );
+  }
+
+  @override
+  State<_ChangePasswordDialog> createState() => _ChangePasswordDialogState();
+}
+
+class _ChangePasswordDialogState extends State<_ChangePasswordDialog> {
+  final _formKey = GlobalKey<FormState>();
+  final _currentController = TextEditingController();
+  final _newController = TextEditingController();
+  final _confirmController = TextEditingController();
+  bool _submitted = false;
+  bool _obscureCurrent = true;
+  bool _obscureNew = true;
+  bool _obscureConfirm = true;
+
+  static const int _minPasswordLength = 8;
+
+  @override
+  void dispose() {
+    _currentController.dispose();
+    _newController.dispose();
+    _confirmController.dispose();
+    super.dispose();
+  }
+
+  String? _validateRequired(String? v) {
+    if (v == null || v.trim().isEmpty) return 'Required';
+    return null;
+  }
+
+  String? _validateNewPassword(String? v) {
+    if (v == null || v.isEmpty) return 'Required';
+    if (v.length < _minPasswordLength) {
+      return 'Must be at least $_minPasswordLength characters';
+    }
+    if (v == _currentController.text) {
+      return 'New password must be different from current';
+    }
+    return null;
+  }
+
+  String? _validateConfirm(String? v) {
+    if (v == null || v.isEmpty) return 'Required';
+    if (v != _newController.text) {
+      return 'Passwords do not match';
+    }
+    return null;
+  }
+
+  void _submit() {
+    if (_submitted) return;
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+    final nav = Navigator.of(context);
+    if (!nav.canPop()) return;
+    _submitted = true;
+    nav.pop(
+      _ChangePasswordResult(
+        currentPassword: _currentController.text,
+        newPassword: _newController.text,
+      ),
+    );
+  }
+
+  void _cancel() {
+    if (_submitted) return;
+    final nav = Navigator.of(context);
+    if (!nav.canPop()) return;
+    _submitted = true;
+    nav.pop(null);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return AlertDialog(
+      title: const Text('Change password'),
+      content: ConstrainedBox(
+        constraints: const BoxConstraints(minWidth: 320),
+        child: SingleChildScrollView(
+          child: Form(
+            key: _formKey,
+            autovalidateMode: AutovalidateMode.onUserInteraction,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Enter your current password and choose a new one.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurface
+                        .withValues(alpha: 0.6),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _currentController,
+                  obscureText: _obscureCurrent,
+                  autofocus: true,
+                  textInputAction: TextInputAction.next,
+                  decoration: InputDecoration(
+                    labelText: 'Current password',
+                    border: const OutlineInputBorder(),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _obscureCurrent
+                            ? Icons.visibility_outlined
+                            : Icons.visibility_off_outlined,
+                      ),
+                      onPressed: () => setState(
+                        () => _obscureCurrent = !_obscureCurrent,
+                      ),
+                    ),
+                  ),
+                  validator: _validateRequired,
+                  onChanged: (_) {
+                    // Re-run the "new password" validator when the
+                    // current value changes, since the same-as check
+                    // depends on it.
+                    _formKey.currentState?.validate();
+                  },
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _newController,
+                  obscureText: _obscureNew,
+                  textInputAction: TextInputAction.next,
+                  decoration: InputDecoration(
+                    labelText: 'New password',
+                    border: const OutlineInputBorder(),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _obscureNew
+                            ? Icons.visibility_outlined
+                            : Icons.visibility_off_outlined,
+                      ),
+                      onPressed: () =>
+                          setState(() => _obscureNew = !_obscureNew),
+                    ),
+                  ),
+                  validator: _validateNewPassword,
+                  onChanged: (_) {
+                    // The confirm field depends on this value.
+                    if (_confirmController.text.isNotEmpty) {
+                      _formKey.currentState?.validate();
+                    }
+                  },
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _confirmController,
+                  obscureText: _obscureConfirm,
+                  textInputAction: TextInputAction.done,
+                  onFieldSubmitted: (_) => _submit(),
+                  decoration: InputDecoration(
+                    labelText: 'Confirm new password',
+                    border: const OutlineInputBorder(),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _obscureConfirm
+                            ? Icons.visibility_outlined
+                            : Icons.visibility_off_outlined,
+                      ),
+                      onPressed: () => setState(
+                        () => _obscureConfirm = !_obscureConfirm,
+                      ),
+                    ),
+                  ),
+                  validator: _validateConfirm,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _cancel,
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: _submit,
+          child: const Text('Change'),
+        ),
+      ],
+    );
+  }
+}
+
+@immutable
+class _ChangePasswordResult {
+  const _ChangePasswordResult({
+    required this.currentPassword,
+    required this.newPassword,
+  });
+
+  final String currentPassword;
+  final String newPassword;
 }
 
 /// Modal dialog that asks the user to enter a new email address to add

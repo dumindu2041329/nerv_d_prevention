@@ -1,0 +1,27 @@
+{
+  "name": "nerv_d_prevention",
+  "version": "1.0.0",
+  "description": "A Flutter-based disaster prevention and weather alert mobile application inspired by Japan's NERV Disaster Prevention App. It is designed to function as an everyday weather companion and an emergency information hub, delivering real-time weather data, emergency-level alerts, hazard mapping, and community-powered crisis information in a high-contrast dark UI.",
+  "main": "index.js",
+  "directories": {
+    "lib": "lib"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dumindu2041329/nerv_d_prevention.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/dumindu2041329/nerv_d_prevention/issues"
+  },
+  "homepage": "https://github.com/dumindu2041329/nerv_d_prevention#readme",
+  "dependencies": {
+    "typescript": "^5.6.3"
+  }
+}

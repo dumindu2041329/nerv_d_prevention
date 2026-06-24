@@ -1,37 +1,37 @@
-import 'package:dio/dio.dart';
-import '../../../core/constants/app_constants.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../domain/entities/weather_data.dart';
 
+/// Calls the `weather` Supabase Edge Function, which proxies the
+/// WeatherAPI.com /forecast.json endpoint. The WeatherAPI key lives
+/// in Supabase Secrets and is never bundled in the APK.
+///
+/// See `supabase/functions/weather/index.ts`.
 class WeatherApiClient {
-  late final Dio _dio;
+  final SupabaseClient _client;
 
-  WeatherApiClient() {
-    _dio = Dio(BaseOptions(
-      baseUrl: ApiConstants.weatherApiBaseUrl,
-      connectTimeout: const Duration(seconds: 10),
-      receiveTimeout: const Duration(seconds: 10),
-    ));
-  }
+  WeatherApiClient({SupabaseClient? client})
+      : _client = client ?? Supabase.instance.client;
 
   /// Single request returning current + 12h hourly + 5-day daily.
   Future<WeatherData> getWeatherData({
     required double latitude,
     required double longitude,
   }) async {
-    final response = await _dio.get(
-      '/forecast.json',
-      queryParameters: {
-        'key': ApiConstants.weatherApiKey,
-        'q': '$latitude,$longitude',
-        'days': 5,
-        'aqi': 'no',
-        'alerts': 'no',
-      },
+    final response = await _client.functions.invoke(
+      'weather',
+      body: {'latitude': latitude, 'longitude': longitude},
     );
 
+    if (response.status != 200) {
+      throw Exception(
+        'weather function failed: ${response.status} ${response.data}',
+      );
+    }
+
     final data = response.data as Map<String, dynamic>;
-    final current = _parseCurrent(data['current']);
-    final forecastDays = data['forecast']['forecastday'] as List;
+    final current = _parseCurrent(data['current'] as Map<String, dynamic>);
+    final forecastDays =
+        (data['forecast']['forecastday'] as List).cast<Map<String, dynamic>>();
     final hourly = _parseHourly(forecastDays);
     final daily = _parseDaily(forecastDays);
     final timezone = data['location']['tz_id'] as String? ?? 'UTC';
