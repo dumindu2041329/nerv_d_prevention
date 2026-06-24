@@ -2,8 +2,8 @@ import 'package:get_it/get_it.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import '../../data/remote/alerts/sos_alert_api_client.dart';
 import '../../data/remote/contact/contact_api_client.dart';
-import '../../data/remote/landslides/landslide_api_client.dart';
-import '../../data/remote/landslides/landslide_polygon_client.dart';
+import '../../data/repositories/landslide_repository_impl.dart';
+import '../../domain/repositories/landslide_repository.dart';
 import '../../data/remote/weatherapi/weather_api_client.dart';
 import '../../data/remote/maptiler/maptiler_geocoding_client.dart';
 import '../../data/remote/supabase/supabase_service.dart';
@@ -36,14 +36,11 @@ Future<void> initDependencies() async {
   getIt.registerSingleton<HiveService>(hiveService);
 
   // 3) API clients — all now route through Supabase Edge Functions.
-  //    The legacy Dio clients (LandslideApiClient, LandslidePolygonClient,
-  //    SosAlertApiClient) keep their direct-upstream calls because their
-  //    sources are key-less or have their own terms. Wrap them in a
-  //    Supabase proxy later if rate-limiting becomes a concern.
   getIt.registerSingleton<WeatherApiClient>(WeatherApiClient());
   getIt.registerSingleton<MaptilerGeocodingClient>(MaptilerGeocodingClient());
-  getIt.registerSingleton<LandslideApiClient>(LandslideApiClient());
-  getIt.registerSingleton<LandslidePolygonClient>(LandslidePolygonClient());
+  getIt.registerSingleton<LandslideRepository>(
+    LandslideRepositoryImpl(),
+  );
   getIt.registerSingleton<SosAlertApiClient>(SosAlertApiClient());
   getIt.registerSingleton<ContactApiClient>(ContactApiClient());
 

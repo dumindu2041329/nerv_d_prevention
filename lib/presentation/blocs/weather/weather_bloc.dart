@@ -14,6 +14,10 @@ class WeatherBloc extends Bloc<WeatherEvent, WeatherState> {
   final WeatherRepository _weatherRepository;
   final LocalNotificationService _notificationService;
 
+  /// Prevents rapid re-requests when switching screens with GPS off.
+  static DateTime? _lastGpsAttempt;
+  static const Duration _gpsCooldown = Duration(seconds: 30);
+
   WeatherBloc({
     required WeatherRepository weatherRepository,
     required LocalNotificationService notificationService,
@@ -22,6 +26,7 @@ class WeatherBloc extends Bloc<WeatherEvent, WeatherState> {
        super(WeatherInitial()) {
     on<LoadWeather>(_onLoadWeather);
     on<_FetchWeatherInBackground>(_onFetchWeatherInBackground);
+    on<_GpsFailed>(_onGpsFailed);
     on<RefreshWeather>(_onRefreshWeather);
     on<SearchLocations>(_onSearchLocations);
     on<SelectLocation>(_onSelectLocation);
@@ -45,11 +50,25 @@ class WeatherBloc extends Bloc<WeatherEvent, WeatherState> {
       add(_FetchWeatherInBackground(location: cachedLocation, forceRefresh: true));
     }
 
+    // Cooldown: skip GPS if we tried within the last 30s to avoid
+    // spamming the permission dialog on rapid tab switches.
+    final now = DateTime.now();
+    if (_lastGpsAttempt != null &&
+        now.difference(_lastGpsAttempt!) < _gpsCooldown) {
+      if (cachedLocation == null) {
+        add(const _GpsFailed());
+      }
+      return;
+    }
+    _lastGpsAttempt = now;
+
     // Resolve real GPS in background and update
     _weatherRepository.getLocationFromGps().then((gpsLocation) {
       if (gpsLocation != null) {
         _weatherRepository.cacheLocation(gpsLocation);
         add(_FetchWeatherInBackground(location: gpsLocation, forceRefresh: true));
+      } else if (cachedLocation == null) {
+        add(const _GpsFailed());
       }
     });
   }
@@ -99,6 +118,18 @@ class WeatherBloc extends Bloc<WeatherEvent, WeatherState> {
         );
       }
     }
+  }
+
+  Future<void> _onGpsFailed(
+    _GpsFailed event,
+    Emitter<WeatherState> emit,
+  ) async {
+    emit(
+      WeatherError(
+        message: 'Could not determine your location. '
+            'Enable location services or search for a location.',
+      ),
+    );
   }
 
   Future<void> _onRefreshWeather(

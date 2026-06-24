@@ -49,6 +49,8 @@ class HomeScreenContent extends StatefulWidget {
 class _HomeScreenContentState extends State<HomeScreenContent> {
   bool _isIslandWide = true;
   final MapController _mapController = MapController();
+  final DraggableScrollableController _sheetController =
+      DraggableScrollableController();
   LatLng? _gpsLocation;
 
   static const _colombo = LatLng(6.9271, 79.8612);
@@ -93,54 +95,75 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
       },
       child: Scaffold(
         backgroundColor: theme.scaffoldBackgroundColor,
-        body: Column(
+        body: Stack(
           children: [
-            // Top toggle bar — Island-wide / Local + SOS fetch button
-            SafeArea(
-              bottom: false,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: NationalLocalToggle(
-                        isNational: _isIslandWide,
-                        onChanged: _onToggleChanged,
+            // Background: top toggle bar + map
+            Positioned.fill(
+              child: Column(
+                children: [
+                  // Top toggle bar — Island-wide / Local + SOS fetch button
+                  SafeArea(
+                    bottom: false,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: NationalLocalToggle(
+                              isNational: _isIslandWide,
+                              onChanged: _onToggleChanged,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          ElevatedButton.icon(
+                            onPressed: () {
+                              context.read<AlertBloc>().add(
+                                const RefreshAlerts(),
+                              );
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFFFF1744),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 10,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            icon: const Icon(Icons.sos_outlined),
+                            label: Text(
+                              'SOS Alerts',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(width: 12),
-                    ElevatedButton.icon(
-                      onPressed: () {
-                        context.read<AlertBloc>().add(const RefreshAlerts());
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFFF1744),
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 10,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      icon: const Icon(Icons.sos_outlined),
-                      label: Text(
-                        'SOS Alerts',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                  Expanded(child: _buildMapSection(context)),
+                ],
               ),
             ),
-            // Map section
-            Expanded(flex: 55, child: _buildMapSection(context)),
-            // Weather & Alert section
-            Expanded(flex: 45, child: _buildWeatherAlertSection(context)),
+            // Draggable bottom sheet with weather + alerts
+            DraggableScrollableSheet(
+              initialChildSize: 0.45,
+              minChildSize: 0.25,
+              maxChildSize: 0.85,
+              snap: true,
+              snapSizes: const [0.25, 0.45, 0.85],
+              controller: _sheetController,
+              builder: (context, scrollController) {
+                return _buildWeatherAlertSheet(
+                  context,
+                  scrollController,
+                );
+              },
+            ),
           ],
         ),
       ),
@@ -214,20 +237,39 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
     );
   }
 
-  // ── Weather + Alert Section ──────────────────────────────────────────
+  // ── Weather + Alert Section (Draggable bottom sheet) ────────────────
 
-  Widget _buildWeatherAlertSection(BuildContext context) {
+  Widget _buildWeatherAlertSheet(
+    BuildContext context,
+    ScrollController scrollController,
+  ) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
     final onSurface = theme.colorScheme.onSurface;
 
     return Container(
-      color: theme.colorScheme.surface,
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: const BorderRadius.vertical(
+          top: Radius.circular(16),
+        ),
+        boxShadow: theme.brightness == Brightness.light
+            ? [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.08),
+                  blurRadius: 12,
+                  offset: const Offset(0, -2),
+                ),
+              ]
+            : null,
+      ),
       child: BlocBuilder<WeatherBloc, WeatherState>(
         builder: (context, state) {
           if (state is WeatherLoading) {
             return Center(
-              child: CircularProgressIndicator(color: theme.colorScheme.primary),
+              child: CircularProgressIndicator(
+                color: theme.colorScheme.primary,
+              ),
             );
           }
 
@@ -247,7 +289,7 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
           }
 
           if (state is WeatherLoaded) {
-            return _buildLoadedContent(context, state);
+            return _buildLoadedContent(context, scrollController, state);
           }
 
           // WeatherInitial — show placeholder
@@ -265,7 +307,11 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
     );
   }
 
-  Widget _buildLoadedContent(BuildContext context, WeatherLoaded state) {
+  Widget _buildLoadedContent(
+    BuildContext context,
+    ScrollController scrollController,
+    WeatherLoaded state,
+  ) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
     final onSurface = theme.colorScheme.onSurface;
@@ -288,8 +334,21 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
         );
       },
       child: ListView(
+        controller: scrollController,
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
         children: [
+          // Drag handle (visual affordance for the sheet)
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 8),
+              decoration: BoxDecoration(
+                color: onSurface.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
           // ── SOS / critical alerts from upstream ──
           BlocBuilder<AlertBloc, AlertState>(
             builder: (context, alertState) {

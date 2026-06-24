@@ -52,3 +52,10 @@ class _FetchWeatherInBackground extends WeatherEvent {
   @override
   List<Object?> get props => [location, forceRefresh];
 }
+
+class _GpsFailed extends WeatherEvent {
+  const _GpsFailed();
+
+  @override
+  List<Object?> get props => [];
+}

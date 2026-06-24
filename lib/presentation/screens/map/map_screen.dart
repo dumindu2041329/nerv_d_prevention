@@ -9,8 +9,7 @@ import '../../../core/di/injection.dart';
 import '../../../core/constants/app_sl_constants.dart';
 import '../../../core/constants/weather_codes.dart';
 import '../../../core/utils/date_time_utils.dart';
-import '../../../data/remote/landslides/landslide_api_client.dart';
-import '../../../data/remote/landslides/landslide_polygon_client.dart';
+import '../../../domain/repositories/landslide_repository.dart';
 import '../../../domain/entities/weather_data.dart';
 import '../../blocs/weather/weather_bloc.dart';
 import 'select_layer_sheet.dart';
@@ -62,31 +61,27 @@ class _MapScreenState extends State<MapScreen> {
   Future<void> _fetchLandslides() async {
     if (_landslideLoading) return;
     setState(() => _landslideLoading = true);
-    final client = getIt<LandslideApiClient>();
-    final polygonClient = getIt<LandslidePolygonClient>();
-    final results = await Future.wait<Object>([
-      client.getSriLankaLandslides(),
-      polygonClient.getSriLankaPolygons(),
-    ]);
-    final features = results[0] as List<LandslideFeature>;
-    final polygons = results[1] as List<LandslidePolygon>;
+    final repo = getIt<LandslideRepository>();
+    final zones = await repo.getActiveZones();
     if (!mounted) return;
     setState(() {
       _landslideLoading = false;
-      _landslidePoints = features.isNotEmpty
-          ? features
-              .map((f) => _HazardPoint(
-                    f.location,
-                    _severityFromString(f.severity),
-                  ))
-              .toList()
-          : const [];
-      _landslidePolygons = polygons
-          .map((p) => _LandslidePolygonItem(
-                p.ring,
-                _severityFromString(p.severity),
-                p.name,
-                p.source,
+      _landslidePoints = zones
+          .where((z) => z.isPoint || !z.isPolygon)
+          .map((z) => _HazardPoint(
+                LatLng(z.latitude!, z.longitude!),
+                _severityFromString(z.severity),
+              ))
+          .toList();
+      _landslidePolygons = zones
+          .where((z) => z.isPolygon)
+          .map((z) => _LandslidePolygonItem(
+                z.polygonRings!
+                    .map((p) => LatLng(p[0], p[1]))
+                    .toList(),
+                _severityFromString(z.severity),
+                z.name,
+                z.source,
               ))
           .toList();
     });
