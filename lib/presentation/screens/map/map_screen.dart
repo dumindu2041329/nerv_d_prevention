@@ -10,6 +10,7 @@ import '../../../core/constants/app_sl_constants.dart';
 import '../../../core/constants/weather_codes.dart';
 import '../../../core/utils/date_time_utils.dart';
 import '../../../domain/repositories/landslide_repository.dart';
+import '../../../domain/entities/location.dart';
 import '../../../domain/entities/weather_data.dart';
 import '../../blocs/weather/weather_bloc.dart';
 import 'select_layer_sheet.dart';
@@ -41,7 +42,18 @@ class _MapScreenState extends State<MapScreen> {
   @override
   void initState() {
     super.initState();
-    _weatherBloc = getIt<WeatherBloc>()..add(const LoadWeather(useGps: true));
+    _weatherBloc = getIt<WeatherBloc>()
+      ..add(
+        const LoadWeather(
+          location: Location(
+            id: 'island_wide',
+            name: 'Sri Lanka',
+            country: 'Sri Lanka',
+            latitude: 7.8731,
+            longitude: 80.7718,
+          ),
+        ),
+      );
     final now = DateTime.now();
     _hazardDisplayedTime =
         '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
@@ -54,8 +66,11 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   void _zoomToMyLocation() {
-    final target = _gpsLocation ?? SLMapConstants.center;
-    _mapController.move(target, 12.0);
+    if (_gpsLocation != null) {
+      _mapController.move(_gpsLocation!, 12.0);
+    } else {
+      _weatherBloc.add(const LoadWeather(useGps: true));
+    }
   }
 
   Future<void> _fetchLandslides() async {
@@ -115,9 +130,22 @@ class _MapScreenState extends State<MapScreen> {
             }
             // Re-fetch weather so the chip and time scrubber reflect the
             // freshly-loaded data for the new layer.
-            _weatherBloc.add(
-              const LoadWeather(useGps: true, forceRefresh: true),
-            );
+            if (_gpsLocation != null) {
+              _weatherBloc.add(const LoadWeather(useGps: true, forceRefresh: true));
+            } else {
+              _weatherBloc.add(
+                const LoadWeather(
+                  location: Location(
+                    id: 'island_wide',
+                    name: 'Sri Lanka',
+                    country: 'Sri Lanka',
+                    latitude: 7.8731,
+                    longitude: 80.7718,
+                  ),
+                  forceRefresh: true,
+                ),
+              );
+            }
           },
         );
       },
@@ -239,7 +267,9 @@ class _MapScreenState extends State<MapScreen> {
       value: _weatherBloc,
       child: BlocListener<WeatherBloc, WeatherState>(
         listener: (context, state) {
-          if (state is WeatherLoaded && state.location != null) {
+          if (state is WeatherLoaded &&
+              state.location != null &&
+              state.location!.isGps) {
             final loc = state.location!;
             final newLatLng = LatLng(loc.latitude, loc.longitude);
             if (_gpsLocation == null) {
