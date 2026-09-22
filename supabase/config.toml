@@ -1,4 +1,5 @@
-project_id = "ebccdpydoptajlkmqefx"
+# Must match SUPABASE_URL in .env (https://<project_id>.supabase.co)
+project_id = "muoaodsgpgbtbdhrmnfj"
 
 [api]
 enabled = true
@@ -26,11 +27,12 @@ enabled = true
 file_size_limit = "50MiB"
 
 [auth]
-enabled = false
-# Clerk handles auth — Supabase auth is intentionally disabled.
+enabled = true
+# The app authenticates with Supabase Auth (email/password) — see
+# lib/data/repositories/auth_repository_impl.dart. Clerk was removed.
 
 [auth.email]
-enable_signup = false
+enable_signup = true
 enable_confirmations = false
 
 [edge_runtime]
@@ -47,8 +49,14 @@ verify_jwt = false
 # Called by Supabase Cron with the service role key, not by clients.
 
 [functions.crisis-pins]
+verify_jwt = true
+# Client always invokes through supabase.functions.invoke, which attaches the
+# session/anon JWT — so no unauthenticated writes to crisis_pins.
+
+[functions.tiles]
 verify_jwt = false
-# Public POST (anon-key) for community-submitted pins. Public GET too.
+# flutter_map's TileLayer fetches plain images and cannot send an
+# Authorization header. Keys stay server-side via Supabase Secrets.
 
 [analytics]
 enabled = false

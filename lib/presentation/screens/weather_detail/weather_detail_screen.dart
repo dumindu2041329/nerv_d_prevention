@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fl_chart/fl_chart.dart';
-import '../../../core/constants/constants.dart';
+import '../../../core/constants/weather_codes.dart';
 import '../../../core/di/injection.dart';
 import '../../../core/utils/date_time_utils.dart';
+import '../../../core/utils/weather_alert_deriver.dart';
 import '../../../domain/entities/location.dart';
 import '../../../domain/entities/weather_data.dart';
 import '../../blocs/weather/weather_bloc.dart';
+import '../../widgets/nerv/nerv_styles.dart';
+import '../../widgets/nerv/deck_header.dart';
+import '../../widgets/nerv/posture_gauge.dart';
 
 class WeatherDetailScreen extends StatefulWidget {
   const WeatherDetailScreen({super.key});
@@ -31,143 +35,146 @@ class _WeatherDetailScreenState extends State<WeatherDetailScreen> {
         ),
       ),
       child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Weather Details'),
-        ),
-        body: BlocBuilder<WeatherBloc, WeatherState>(
-          builder: (context, state) {
-            if (state is WeatherLoading) {
-              return const Center(child: CircularProgressIndicator());
-            }
-            if (state is WeatherError) {
+        body: SafeArea(
+          child: BlocBuilder<WeatherBloc, WeatherState>(
+            builder: (context, state) {
+              if (state is WeatherLoading) {
+                return const Center(
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                );
+              }
+              if (state is WeatherError) {
+                return Center(
+                  child: Text(state.message, style: context.nerv.body),
+                );
+              }
+              if (state is WeatherLoaded) {
+                return _buildContent(context, state);
+              }
               return Center(
-                child: Text(
-                  state.message,
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-                  ),
-                ),
+                child: Text('Loading weather...', style: context.nerv.dataLabel),
               );
-            }
-            if (state is WeatherLoaded) {
-              return _buildContent(context, state.weatherData);
-            }
-            return const Center(child: Text('Loading weather...'));
-          },
+            },
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildContent(BuildContext context, WeatherData data) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(AppSpacing.space6),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildCurrentConditions(context, data.current),
-          const SizedBox(height: AppSpacing.space6),
-          _buildSectionTitle(context, 'Hourly Forecast'),
-          const SizedBox(height: AppSpacing.space4),
-          _buildHourlyChart(context, data.hourly),
-          const SizedBox(height: AppSpacing.space6),
-          _buildSectionTitle(context, '7-Day Forecast'),
-          const SizedBox(height: AppSpacing.space4),
-          _buildDailyForecast(context, data.daily),
-          if (data.daily.isNotEmpty) ...[
-            const SizedBox(height: AppSpacing.space6),
-            _buildSectionTitle(context, 'Sunrise & Sunset'),
-            const SizedBox(height: AppSpacing.space4),
-            _buildSunriseSunsetCard(context, data.daily.first),
-            const SizedBox(height: AppSpacing.space6),
-            _buildSectionTitle(context, 'Wind Details'),
-            const SizedBox(height: AppSpacing.space4),
-            _buildWindCard(context, data),
-          ],
-          const SizedBox(height: AppSpacing.space8),
-        ],
-      ),
+  Widget _buildContent(BuildContext context, WeatherLoaded state) {
+    final data = state.weatherData;
+    final alerts = WeatherAlertDeriver.deriveAlerts(
+      data,
+      districtName: state.location?.name,
+    );
+    final posture = NervStyles.postureOf(alerts.map((a) => a.severity).toList());
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        DeckHeader(
+          title: 'Weather Details',
+          eyebrowText: 'SRI LANKA · OBSERVATION',
+          subtitle: state.location?.name ?? 'Current Location',
+          posture: posture,
+        ),
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildCurrentConditions(context, data.current),
+                const SizedBox(height: 16),
+                PostureGauge(level: posture),
+                const SizedBox(height: 24),
+                _buildSectionTitle(context, 'HOURLY TEMPERATURE'),
+                const SizedBox(height: 12),
+                _buildHourlyChart(context, data.hourly),
+                const SizedBox(height: 24),
+                _buildSectionTitle(context, '7-DAY OUTLOOK'),
+                const SizedBox(height: 12),
+                _buildDailyForecast(context, data.daily),
+                if (data.daily.isNotEmpty) ...[
+                  const SizedBox(height: 24),
+                  _buildSectionTitle(context, 'SUN · WIND'),
+                  const SizedBox(height: 12),
+                  _buildSunriseSunsetCard(context, data.daily.first),
+                  const SizedBox(height: 10),
+                  _buildWindCard(context, data),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 
   Widget _buildSectionTitle(BuildContext context, String title) {
-    final theme = Theme.of(context);
-    return Text(
-      title,
-      style: theme.textTheme.titleMedium?.copyWith(
-        fontWeight: FontWeight.w600,
-      ),
-    );
+    return Eyebrow(title, color: context.nerv.onSurface.withValues(alpha: 0.6));
   }
 
   Widget _buildCurrentConditions(BuildContext context, CurrentWeather current) {
-    final theme = Theme.of(context);
-    final weatherIcon = WeatherCodeMapping.getIcon(current.weatherCode, isDay: current.isDay);
-    final weatherDesc = WeatherCodeMapping.getDescription(current.weatherCode, isDay: current.isDay);
+    final nerv = context.nerv;
+    final onSurface = nerv.onSurface;
+    final weatherIcon = WeatherCodeMapping.getIcon(
+      current.weatherCode,
+      isDay: current.isDay,
+    );
+    final weatherDesc = WeatherCodeMapping.getDescription(
+      current.weatherCode,
+      isDay: current.isDay,
+    );
 
     return Container(
-      padding: const EdgeInsets.all(AppSpacing.space6),
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            theme.colorScheme.primary.withValues(alpha: 0.2),
-            theme.colorScheme.primary.withValues(alpha: 0.05),
-          ],
-        ),
-        borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+        color: nerv.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: nerv.border, width: 1),
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            weatherIcon,
-            style: const TextStyle(fontSize: 72),
-          ),
-          const SizedBox(height: AppSpacing.space4),
-          Text(
-            '${current.temperature.toStringAsFixed(1)}°C',
-            style: theme.textTheme.displayLarge?.copyWith(
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          Text(
-            weatherDesc,
-            style: theme.textTheme.titleMedium?.copyWith(
-              color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.space4),
-          Text(
-            'Feels like ${current.apparentTemperature.toStringAsFixed(1)}°C',
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.space6),
+          Eyebrow('CURRENT'),
+          const SizedBox(height: 12),
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              _buildConditionItem(
-                Icons.water_drop_outlined,
-                'Humidity',
-                '${current.humidity.toStringAsFixed(0)}%',
+              Text(weatherIcon, style: const TextStyle(fontSize: 56)),
+              const SizedBox(width: 16),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '${current.temperature.toStringAsFixed(1)}°C',
+                    style: nerv.numeral(size: 48),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    weatherDesc,
+                    style: nerv.body.copyWith(fontSize: 14),
+                  ),
+                ],
               ),
-              _buildConditionItem(
-                Icons.air,
-                'Wind',
-                '${current.windSpeed.toStringAsFixed(0)} km/h',
+              const Spacer(),
+              Text(
+                'FEELS ${current.apparentTemperature.toStringAsFixed(0)}°C',
+                style: nerv.dataLabel.copyWith(fontSize: 10),
               ),
-              _buildConditionItem(
-                Icons.umbrella_outlined,
-                'Precip',
-                '${current.precipitation.toStringAsFixed(1)} mm',
-              ),
-              _buildConditionItem(
-                Icons.wb_sunny_outlined,
-                'UV Index',
-                current.uvIndex.toStringAsFixed(0),
-              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Container(height: 1, color: onSurface.withValues(alpha: 0.08)),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              _buildConditionItem(context, 'HUMIDITY', '${current.humidity.toStringAsFixed(0)}%'),
+              _buildConditionItem(context, 'WIND', '${current.windSpeed.toStringAsFixed(0)} km/h'),
+              _buildConditionItem(context, 'PRECIP', '${current.precipitation.toStringAsFixed(1)} mm'),
+              _buildConditionItem(context, 'UV', current.uvIndex.toStringAsFixed(0)),
             ],
           ),
         ],
@@ -175,22 +182,21 @@ class _WeatherDetailScreenState extends State<WeatherDetailScreen> {
     );
   }
 
-  Widget _buildConditionItem(IconData icon, String label, String value) {
+  Widget _buildConditionItem(BuildContext context, String label, String value) {
+    final nerv = context.nerv;
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, size: 24),
-        const SizedBox(height: AppSpacing.space1),
-        Text(label, style: const TextStyle(fontSize: 12)),
-        Text(
-          value,
-          style: const TextStyle(fontWeight: FontWeight.w600),
-        ),
+        Eyebrow(label, color: nerv.onSurface.withValues(alpha: 0.4)),
+        const SizedBox(height: 4),
+        Text(value, style: nerv.numeralSmall(size: 13)),
       ],
     );
   }
 
   Widget _buildHourlyChart(BuildContext context, List<HourlyWeather> hourly) {
     final theme = Theme.of(context);
+    final nerv = context.nerv;
     final displayHours = hourly.take(12).toList();
     if (displayHours.isEmpty) return const SizedBox.shrink();
 
@@ -202,13 +208,11 @@ class _WeatherDetailScreenState extends State<WeatherDetailScreen> {
 
     return Container(
       height: 200,
-      padding: const EdgeInsets.all(AppSpacing.space4),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-        border: Border.all(
-          color: theme.dividerTheme.color ?? Colors.grey,
-        ),
+        color: nerv.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: nerv.border, width: 1),
       ),
       child: LineChart(
         LineChartData(
@@ -218,7 +222,7 @@ class _WeatherDetailScreenState extends State<WeatherDetailScreen> {
             horizontalInterval: (chartMaxY - chartMinY) / 4,
             getDrawingHorizontalLine: (value) {
               return FlLine(
-                color: theme.dividerTheme.color ?? Colors.grey,
+                color: nerv.hairline,
                 strokeWidth: 1,
               );
             },
@@ -239,7 +243,10 @@ class _WeatherDetailScreenState extends State<WeatherDetailScreen> {
                     padding: const EdgeInsets.only(top: 8),
                     child: Text(
                       label,
-                      style: theme.textTheme.bodySmall,
+                      style: nerv.dataLabel.copyWith(
+                        fontSize: 10,
+                        color: nerv.onSurface.withValues(alpha: 0.5),
+                      ),
                     ),
                   );
                 },
@@ -252,10 +259,10 @@ class _WeatherDetailScreenState extends State<WeatherDetailScreen> {
                 getTitlesWidget: (value, meta) {
                   return Text(
                     '${value.toInt()}°',
-                    style: theme.textTheme.bodySmall,
+                    style: nerv.dataLabel.copyWith(fontSize: 10),
                   );
                 },
-                reservedSize: 35,
+                reservedSize: 32,
               ),
             ),
             topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
@@ -274,12 +281,12 @@ class _WeatherDetailScreenState extends State<WeatherDetailScreen> {
               ),
               isCurved: true,
               color: theme.colorScheme.primary,
-              barWidth: 3,
+              barWidth: 2.5,
               isStrokeCapRound: true,
               dotData: const FlDotData(show: false),
               belowBarData: BarAreaData(
                 show: true,
-                color: theme.colorScheme.primary.withValues(alpha: 0.1),
+                color: theme.colorScheme.primary.withValues(alpha: 0.08),
               ),
             ),
           ],
@@ -289,65 +296,85 @@ class _WeatherDetailScreenState extends State<WeatherDetailScreen> {
   }
 
   Widget _buildDailyForecast(BuildContext context, List<DailyWeather> daily) {
-    final theme = Theme.of(context);
-    final weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    final nerv = context.nerv;
+    final onSurface = nerv.onSurface;
     final displayDays = daily.take(7).toList();
-
     if (displayDays.isEmpty) return const SizedBox.shrink();
 
     return Container(
-      padding: const EdgeInsets.all(AppSpacing.space4),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-        border: Border.all(
-          color: theme.dividerTheme.color ?? Colors.grey,
-        ),
+        color: nerv.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: nerv.border, width: 1),
       ),
       child: Column(
         children: List.generate(displayDays.length, (index) {
           final day = displayDays[index];
           String dayLabel;
           if (index == 0) {
-            dayLabel = 'Today';
+            dayLabel = 'TODAY';
           } else if (index == 1) {
-            dayLabel = 'Tomorrow';
+            dayLabel = 'TOMORROW';
           } else {
+            final weekdays = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
             dayLabel = weekdays[day.time.weekday % 7];
           }
 
-          final conditionIcon = WeatherCodeMapping.getIcon(day.weatherCode, isDay: true);
+          final conditionIcon = WeatherCodeMapping.getIcon(
+            day.weatherCode,
+            isDay: true,
+          );
 
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: AppSpacing.space2),
+          return Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              border: index == displayDays.length - 1
+                  ? null
+                  : Border(
+                      bottom: BorderSide(
+                        color: onSurface.withValues(alpha: 0.08),
+                        width: 0.5,
+                      ),
+                    ),
+            ),
             child: Row(
               children: [
                 SizedBox(
-                  width: 70,
+                  width: 78,
                   child: Text(
                     dayLabel,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      fontWeight: index == 0 ? FontWeight.w600 : FontWeight.w400,
+                    style: TextStyle(
+                      color: index == 0 ? Theme.of(context).colorScheme.primary : onSurface,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.1,
                     ),
                   ),
                 ),
-                Text(
-                  conditionIcon,
-                  style: const TextStyle(fontSize: 20),
-                ),
+                Text(conditionIcon, style: const TextStyle(fontSize: 18)),
                 const Spacer(),
                 Text(
                   '${day.temperatureMin.toStringAsFixed(0)}°',
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                  style: nerv.dataLabel.copyWith(color: onSurface.withValues(alpha: 0.55)),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  width: 56,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(2),
+                    gradient: LinearGradient(
+                      colors: [
+                        Theme.of(context).colorScheme.primary,
+                        const Color(0xFFFF6B00),
+                      ],
+                    ),
                   ),
                 ),
-                const SizedBox(width: AppSpacing.space3),
+                const SizedBox(width: 8),
                 Text(
-                  '${day.temperatureMax.toStringAsFixed(0)}°C',
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
+                  '${day.temperatureMax.toStringAsFixed(0)}°',
+                  style: nerv.numeralSmall(size: 13),
                 ),
               ],
             ),
@@ -358,35 +385,28 @@ class _WeatherDetailScreenState extends State<WeatherDetailScreen> {
   }
 
   Widget _buildSunriseSunsetCard(BuildContext context, DailyWeather today) {
-    final theme = Theme.of(context);
+    final nerv = context.nerv;
+    final onSurface = nerv.onSurface;
 
     return Container(
-      padding: const EdgeInsets.all(AppSpacing.space4),
+      padding: const EdgeInsets.symmetric(vertical: 14),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-        border: Border.all(
-          color: theme.dividerTheme.color ?? Colors.grey,
-        ),
+        color: nerv.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: nerv.border, width: 1),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
           _buildSunItem(
             context,
-            Icons.wb_sunny,
-            'Sunrise',
+            'SUNRISE',
             DateTimeUtils.formatTime(today.sunrise),
           ),
-          Container(
-            width: 1,
-            height: 50,
-            color: theme.dividerTheme.color,
-          ),
+          Container(width: 1, height: 40, color: onSurface.withValues(alpha: 0.12)),
           _buildSunItem(
             context,
-            Icons.nightlight_round,
-            'Sunset',
+            'SUNSET',
             DateTimeUtils.formatTime(today.sunset),
           ),
         ],
@@ -394,122 +414,56 @@ class _WeatherDetailScreenState extends State<WeatherDetailScreen> {
     );
   }
 
-  Widget _buildSunItem(
-    BuildContext context,
-    IconData icon,
-    String label,
-    String time,
-  ) {
-    final theme = Theme.of(context);
-
+  Widget _buildSunItem(BuildContext context, String label, String time) {
+    final nerv = context.nerv;
     return Column(
       children: [
-        Icon(icon, color: theme.colorScheme.primary),
-        const SizedBox(height: AppSpacing.space2),
-        Text(
-          label,
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
-          ),
-        ),
-        Text(
-          time,
-          style: theme.textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w600,
-          ),
-        ),
+        Eyebrow(label, color: nerv.onSurface.withValues(alpha: 0.45)),
+        const SizedBox(height: 6),
+        Text(time, style: nerv.numeralSmall(size: 16)),
       ],
     );
   }
 
   Widget _buildWindCard(BuildContext context, WeatherData data) {
-    final theme = Theme.of(context);
+    final nerv = context.nerv;
+    final onSurface = nerv.onSurface;
     final current = data.current;
     final windDir = _windDirectionFromDegrees(current.windDirection);
-    final gustSpeed = data.daily.isNotEmpty
-        ? data.daily.first.windGustsMax
-        : 0.0;
+    final gustSpeed = data.daily.isNotEmpty ? data.daily.first.windGustsMax : 0.0;
 
     return Container(
-      padding: const EdgeInsets.all(AppSpacing.space4),
+      padding: const EdgeInsets.symmetric(vertical: 14),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-        border: Border.all(
-          color: theme.dividerTheme.color ?? Colors.grey,
-        ),
+        color: nerv.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: nerv.border, width: 1),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
-          Column(
-            children: [
-              Icon(Icons.navigation, color: theme.colorScheme.primary),
-              const SizedBox(height: AppSpacing.space2),
-              Text(
-                'Direction',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
-                ),
-              ),
-              Text(
-                windDir,
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-          Container(
-            width: 1,
-            height: 50,
-            color: theme.dividerTheme.color,
-          ),
-          Column(
-            children: [
-              Icon(Icons.air, color: theme.colorScheme.primary),
-              const SizedBox(height: AppSpacing.space2),
-              Text(
-                'Speed',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
-                ),
-              ),
-              Text(
-                '${current.windSpeed.toStringAsFixed(0)} km/h',
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-          Container(
-            width: 1,
-            height: 50,
-            color: theme.dividerTheme.color,
-          ),
-          Column(
-            children: [
-              Icon(Icons.storm, color: theme.colorScheme.primary),
-              const SizedBox(height: AppSpacing.space2),
-              Text(
-                'Gusts',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
-                ),
-              ),
-              Text(
-                gustSpeed > 0
-                    ? '${gustSpeed.toStringAsFixed(0)} km/h'
-                    : 'N/A',
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
+          _buildWindItem(context, 'DIRECTION', windDir),
+          Container(width: 1, height: 40, color: onSurface.withValues(alpha: 0.12)),
+          _buildWindItem(context, 'SPEED', '${current.windSpeed.toStringAsFixed(0)} km/h'),
+          Container(width: 1, height: 40, color: onSurface.withValues(alpha: 0.12)),
+          _buildWindItem(
+            context,
+            'GUSTS',
+            gustSpeed > 0 ? '${gustSpeed.toStringAsFixed(0)} km/h' : 'N/A',
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildWindItem(BuildContext context, String label, String value) {
+    final nerv = context.nerv;
+    return Column(
+      children: [
+        Eyebrow(label, color: nerv.onSurface.withValues(alpha: 0.45)),
+        const SizedBox(height: 6),
+        Text(value, style: nerv.numeralSmall(size: 13)),
+      ],
     );
   }
 

@@ -4,16 +4,19 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 /// Initializes the Supabase client and exposes a singleton handle.
 ///
 /// The Supabase client is used for:
+///   - Email/password authentication (Supabase Auth / GoTrue)
 ///   - Calling Edge Functions (weather, geocode, tiles, contact, crisis-pins)
 ///   - Reading/writing Postgres tables (alerts, sos_alerts, crisis_pins, ...)
 ///   - Subscribing to Realtime channels (live alert updates on Home)
 ///
-/// Auth is intentionally NOT used — Clerk is the auth provider. Supabase
-/// auth is disabled in `supabase/config.toml`. The anon key is safe to
-/// ship in the client; server-side secrets (WEATHERAPI_KEY etc.) live in
-/// Supabase Secrets and are never exposed.
+/// The anon key is safe to ship in the client; server-side secrets
+/// (WEATHERAPI_KEY etc.) live in Supabase Secrets and are never exposed.
 class SupabaseService {
   SupabaseClient get client => Supabase.instance.client;
+
+  /// The GoTrue (auth) client for email/password sign in, sign up,
+  /// session persistence, and profile updates.
+  GoTrueClient get auth => client.auth;
 
   /// The Supabase project URL, used to construct Edge Function URLs and
   /// tile proxy URLs.
@@ -51,9 +54,13 @@ class SupabaseService {
       // for mobile, but we explicitly disable debug logs in release.
       debug: false,
       authOptions: const FlutterAuthClientOptions(
-        // Auth is handled by Clerk. Disable Supabase's auto-refresh so it
-        // does not interfere with the Clerk session lifecycle.
-        autoRefreshToken: false,
+        // Email/password auth is the app's authentication mechanism. PKCE is
+        // the recommended flow for native/mobile clients and the default in
+        // supabase_flutter v2. Session persistence + auto-refresh use the
+        // platform default persistor (SharedPreferences on mobile,
+        // localStorage on web).
+        authFlowType: AuthFlowType.pkce,
+        autoRefreshToken: true,
       ),
     );
   }

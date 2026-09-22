@@ -8,7 +8,7 @@
 // `RESEND_API_KEY` as a Supabase Secret and uncommenting the mail block.
 // ============================================================================
 
-// @ts-expect-error — Deno runtime
+// Deno runtime globals (Deno, FetchEvent, Response, …)
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 // @ts-expect-error — Deno remote import
 import { createClient } from "jsr:@supabase/supabase-js@2";
@@ -119,7 +119,9 @@ function corsHeaders(): Record<string, string> {
     return {
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Methods": "POST, OPTIONS",
-        "Access-Control-Allow-Headers": "authorization, content-type, apikey",
+        // Wildcard so supabase-js headers (x-client-info, ...) pass
+        // preflight when the app runs on web.
+        "Access-Control-Allow-Headers": "*",
     };
 }
 

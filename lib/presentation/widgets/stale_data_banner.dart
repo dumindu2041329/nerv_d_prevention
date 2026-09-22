@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../core/constants/constants.dart';
 
 class StaleDataBanner extends StatelessWidget {
   final DateTime lastUpdated;
@@ -11,30 +10,30 @@ class StaleDataBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final accent = Theme.of(context).colorScheme.primary;
 
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.space4,
-        vertical: AppSpacing.space2,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: theme.colorScheme.primary.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+        color: accent.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: accent.withValues(alpha: 0.4),
+          width: 1,
+        ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            Icons.update,
-            size: 16,
-            color: theme.colorScheme.primary,
-          ),
-          const SizedBox(width: AppSpacing.space2),
+          Icon(Icons.update, size: 14, color: accent),
+          const SizedBox(width: 8),
           Text(
-            'Last updated: ${_formatLastUpdated()}',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.primary,
+            'STALE DATA · ${_formatLastUpdated()}',
+            style: TextStyle(
+              color: accent,
+              fontSize: 9,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.1,
             ),
           ),
         ],
@@ -47,13 +46,13 @@ class StaleDataBanner extends StatelessWidget {
     final diff = now.difference(lastUpdated);
 
     if (diff.inMinutes < 1) {
-      return 'Just now';
+      return 'JUST NOW';
     } else if (diff.inMinutes < 60) {
-      return '${diff.inMinutes}m ago';
+      return '${diff.inMinutes}M AGO';
     } else if (diff.inHours < 24) {
-      return '${diff.inHours}h ago';
+      return '${diff.inHours}H AGO';
     } else {
-      return '${diff.inDays}d ago';
+      return '${diff.inDays}D AGO';
     }
   }
 }

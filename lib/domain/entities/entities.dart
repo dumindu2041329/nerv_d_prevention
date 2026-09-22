@@ -4,3 +4,4 @@ export 'location.dart';
 export 'timeline_event.dart';
 export 'crisis_pin.dart';
 export 'landslide_zone.dart';
+export 'auth_user.dart';

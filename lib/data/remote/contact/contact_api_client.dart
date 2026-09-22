@@ -1,4 +1,3 @@
-import 'package:clerk_flutter/clerk_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// Sends Contact-Us form submissions to the Supabase `contact` Edge
@@ -19,13 +18,9 @@ class ContactApiClient {
   static const String supportEmail = 'nervd.app2demo@gmail.com';
 
   final SupabaseClient _client;
-  final String? _currentUserId;
 
-  ContactApiClient({
-    SupabaseClient? client,
-    String? currentUserId,
-  })  : _client = client ?? Supabase.instance.client,
-        _currentUserId = currentUserId;
+  ContactApiClient({SupabaseClient? client})
+      : _client = client ?? Supabase.instance.client;
 
   /// Submits the contact form via the Supabase `contact` Edge Function.
   /// Returns `true` if the server accepted the message (HTTP 200),
@@ -37,6 +32,9 @@ class ContactApiClient {
     required String message,
   }) async {
     try {
+      // Resolve the signed-in user at call time so the attribution always
+      // reflects the current Supabase Auth session.
+      final userId = _client.auth.currentUser?.id;
       final response = await _client.functions.invoke(
         'contact',
         body: {
@@ -44,7 +42,7 @@ class ContactApiClient {
           'email': email,
           'subject': subject,
           'message': message,
-          if (_currentUserId != null) 'user_id': _currentUserId,
+          'user_id': ?userId,
         },
       );
       return response.status == 200;
@@ -52,14 +50,4 @@ class ContactApiClient {
       return false;
     }
   }
-}
-
-/// Helper for DI to resolve the Clerk user id (or null) at registration
-/// time. Used by [ContactApiClient] to attribute contact messages to
-/// the signed-in user when available.
-String? resolveClerkUserId(ClerkAuthState? authState) {
-  final user = authState?.user;
-  if (user == null) return null;
-  // Clerk's `User` exposes `id` directly.
-  return user.id;
 }

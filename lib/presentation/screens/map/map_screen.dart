@@ -13,6 +13,8 @@ import '../../../domain/repositories/landslide_repository.dart';
 import '../../../domain/entities/location.dart';
 import '../../../domain/entities/weather_data.dart';
 import '../../blocs/weather/weather_bloc.dart';
+import '../../widgets/nerv/nerv_styles.dart';
+import '../../widgets/nerv/deck_header.dart';
 import 'select_layer_sheet.dart';
 
 class MapScreen extends StatefulWidget {
@@ -636,7 +638,7 @@ class _MapScreenState extends State<MapScreen> {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(emoji, style: const TextStyle(fontSize: 22)),
+                Text(emoji, style: const TextStyle(fontSize: 20)),
                 const SizedBox(width: 8),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -644,17 +646,14 @@ class _MapScreenState extends State<MapScreen> {
                   children: [
                     Text(
                       '${temp.toStringAsFixed(0)}°C',
-                      style: TextStyle(
-                        color: primaryText,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                      ),
+                      style: context.nerv.numeralSmall(size: 17),
                     ),
                     Text(
                       '$locationName · ${DateTimeUtils.formatTime(time)}',
                       style: TextStyle(
-                        color: primaryText.withValues(alpha: 0.6),
-                        fontSize: 10,
+                        color: primaryText.withValues(alpha: 0.55),
+                        fontSize: 9,
+                        letterSpacing: 0.5,
                       ),
                     ),
                   ],
@@ -685,7 +684,7 @@ class _MapScreenState extends State<MapScreen> {
         height: 48,
         decoration: BoxDecoration(
           color: bg,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(10),
           border: Border.all(color: border, width: 1),
         ),
         child: Icon(
@@ -713,6 +712,7 @@ class _MapScreenState extends State<MapScreen> {
             Colors.white.withValues(alpha: 0.6),
             Colors.transparent,
           ];
+    final nerv = context.nerv;
     return Container(
       padding: EdgeInsets.only(
         top: MediaQuery.of(context).padding.top + 8,
@@ -727,14 +727,21 @@ class _MapScreenState extends State<MapScreen> {
       ),
       child: Column(
         children: [
-          Text(
-            isHazard ? _hazardTitle : _selectedLayer.mapTitle,
-            style: TextStyle(
-              color: onSurface,
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.5,
-            ),
+          Row(
+            children: [
+              const SizedBox(width: 16),
+              Expanded(
+                child: Text(
+                  (isHazard ? _hazardTitle : _selectedLayer.mapTitle)
+                      .toUpperCase(),
+                  style: nerv.eyebrow.copyWith(
+                    color: onSurface.withValues(alpha: 0.85),
+                  ),
+                ),
+              ),
+              const LiveClock(),
+              const SizedBox(width: 16),
+            ],
           ),
           const SizedBox(height: 10),
           if (isHazard && _hazardTab == _HazardTab.rain)
@@ -924,20 +931,34 @@ class _MapScreenState extends State<MapScreen> {
         children: [
           // Time display (bottom-left)
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
               color: pillIdleBg,
               borderRadius: BorderRadius.circular(6),
               border: Border.all(color: barBorder, width: 0.5),
             ),
-            child: Text(
-              _hazardDisplayedTime,
-              style: TextStyle(
-                color: primary,
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                fontFeatures: const [FontFeature.tabularFigures()],
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'OBS',
+                  style: TextStyle(
+                    color: primary.withValues(alpha: 0.6),
+                    fontSize: 8,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+                Text(
+                  _hazardDisplayedTime,
+                  style: TextStyle(
+                    color: primary,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+                ),
+              ],
             ),
           ),
           const SizedBox(width: 10),
@@ -1004,11 +1025,12 @@ class _MapScreenState extends State<MapScreen> {
             ),
           ),
           child: Text(
-            label,
+            label.toUpperCase(),
             style: TextStyle(
               color: selected ? primary : idleText,
-              fontSize: 13,
+              fontSize: 11,
               fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+              letterSpacing: 1.2,
             ),
           ),
         ),
@@ -1058,28 +1080,40 @@ class _MapScreenState extends State<MapScreen> {
             children: [
               Row(
                 children: [
-                  const SizedBox(width: 60),
-                  Text(
-                    isNow
-                        ? 'Now · Local'
-                        : '${DateTimeUtils.formatDate(localSelectedTime)} · Local',
-                    style: TextStyle(
-                      color: primary,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'LOCAL TIME',
+                          style: context.nerv.eyebrow.copyWith(
+                            color: primary.withValues(alpha: 0.7),
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          isNow
+                              ? 'NOW'
+                              : DateTimeUtils.formatDate(localSelectedTime)
+                                  .toUpperCase(),
+                          style: TextStyle(
+                            color: primary.withValues(alpha: 0.85),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(width: 16),
                   Text(
                     DateTimeUtils.formatTime(localSelectedTime),
-                    style: TextStyle(
+                    style: context.nerv.numeral(size: 34).copyWith(
                       color: primary,
-                      fontSize: 36,
-                      fontWeight: FontWeight.w300,
                       letterSpacing: 2,
                     ),
                   ),
-                  const Spacer(),
+                  const SizedBox(width: 12),
                   InkResponse(
                     onTap: _openLayerSheet,
                     radius: 24,
@@ -1088,7 +1122,7 @@ class _MapScreenState extends State<MapScreen> {
                       child: Icon(
                         Icons.layers,
                         color: primary,
-                        size: 28,
+                        size: 26,
                       ),
                     ),
                   ),

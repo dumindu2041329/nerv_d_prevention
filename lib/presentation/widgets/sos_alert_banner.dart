@@ -2,13 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../core/constants/app_colors.dart';
 import '../../domain/entities/alert.dart';
+import 'nerv/nerv_styles.dart';
 
 /// A prominent, full-bleed banner used to surface SOS-level disaster
-/// alerts fetched from the GDACS pipeline. Designed to demand
-/// attention: pulsing icon, full saturation, bordered with a 4px
-/// severity-coloured stripe. Use this only for [SeverityLevel.critical]
-/// or [SeverityLevel.emergency] alerts — the regular [AlertBanner] is
-/// fine for everything else.
+/// alerts fetched from the GDACS pipeline. Demands attention: pulsing
+/// icon, full saturation, 3px severity bar on the left edge. Use this
+/// only for [SeverityLevel.critical] or [SeverityLevel.emergency]
+/// alerts.
 class SosAlertBanner extends StatefulWidget {
   final Alert alert;
   final VoidCallback? onTap;
@@ -36,8 +36,6 @@ class _SosAlertBannerState extends State<SosAlertBanner>
     );
     if (widget.alert.severity == SeverityLevel.critical) {
       _pulse.repeat(reverse: true);
-      // Subtle haptic nudge so a user who hasn't yet looked at the
-      // screen is alerted. Cheap to fire once at mount.
       HapticFeedback.heavyImpact();
     }
   }
@@ -50,12 +48,12 @@ class _SosAlertBannerState extends State<SosAlertBanner>
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final nerv = context.nerv;
     final color = widget.alert.severity.color;
     final isCritical = widget.alert.severity == SeverityLevel.critical;
     final iconOpacity =
         isCritical ? _pulseAnim : const AlwaysStoppedAnimation<double>(1.0);
-    final onSurface = theme.colorScheme.onSurface;
+    final onSurface = nerv.onSurface;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -63,149 +61,146 @@ class _SosAlertBannerState extends State<SosAlertBanner>
         color: Colors.transparent,
         child: InkWell(
           onTap: widget.onTap,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(10),
           child: Ink(
             decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.18),
-              borderRadius: BorderRadius.circular(12),
-              border: Border(
-                left: BorderSide(color: color, width: 4),
-                top: BorderSide(
-                  color: color.withValues(alpha: 0.4),
-                  width: 0.5,
-                ),
-                right: BorderSide(
-                  color: color.withValues(alpha: 0.4),
-                  width: 0.5,
-                ),
-                bottom: BorderSide(
-                  color: color.withValues(alpha: 0.4),
-                  width: 0.5,
-                ),
-              ),
+              color: color.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: nerv.border, width: 1),
             ),
-            child: Padding(
-              padding: const EdgeInsets.all(14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+            child: IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Row(
-                    children: [
-                      FadeTransition(
-                        opacity: iconOpacity,
-                        child: Container(
-                          width: 36,
-                          height: 36,
-                          decoration: BoxDecoration(
-                            color: color.withValues(alpha: 0.25),
-                            shape: BoxShape.circle,
+                  Container(width: 3, color: color),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.all(14),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              FadeTransition(
+                                opacity: iconOpacity,
+                                child: Icon(
+                                  Icons.warning_amber_rounded,
+                                  color: color,
+                                  size: 20,
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Text(
+                                          'SOS',
+                                          style: TextStyle(
+                                            color: color,
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w900,
+                                            letterSpacing: 1.6,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        // Flexible so the chip ellipsizes
+                                        // instead of overflowing in narrow
+                                        // columns (responsive layouts).
+                                        Flexible(
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 6,
+                                              vertical: 2,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: color.withValues(alpha: 0.18),
+                                              borderRadius: BorderRadius.circular(4),
+                                            ),
+                                            child: Text(
+                                              widget.alert.severity.label,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: TextStyle(
+                                                color: color,
+                                                fontSize: 9,
+                                                fontWeight: FontWeight.w700,
+                                                letterSpacing: 0.8,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                        const Spacer(),
+                                        Flexible(
+                                          child: Text(
+                                            _formatTime(widget.alert.issuedTime),
+                                            textAlign: TextAlign.end,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: nerv.dataLabel.copyWith(
+                                              fontSize: 10,
+                                              letterSpacing: 1,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      widget.alert.headline,
+                                      style: TextStyle(
+                                        color: onSurface,
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w700,
+                                        height: 1.3,
+                                      ),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ),
-                          child: Icon(
-                            Icons.warning_amber_rounded,
-                            color: color,
-                            size: 22,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
+                          if (widget.alert.description.isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              widget.alert.description,
+                              style: nerv.body.copyWith(fontSize: 12),
+                              maxLines: 3,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                          if (widget.alert.location.isNotEmpty) ...[
+                            const SizedBox(height: 6),
                             Row(
                               children: [
-                                Text(
-                                  'SOS',
-                                  style: TextStyle(
-                                    color: color,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w900,
-                                    letterSpacing: 1.4,
-                                  ),
+                                Icon(
+                                  Icons.place_outlined,
+                                  size: 12,
+                                  color: onSurface.withValues(alpha: 0.5),
                                 ),
-                                const SizedBox(width: 6),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 6,
-                                    vertical: 2,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: color.withValues(alpha: 0.25),
-                                    borderRadius: BorderRadius.circular(4),
-                                  ),
+                                const SizedBox(width: 4),
+                                Expanded(
                                   child: Text(
-                                    widget.alert.severity.label,
-                                    style: TextStyle(
-                                      color: color,
+                                    widget.alert.location,
+                                    style: nerv.dataLabel.copyWith(
                                       fontSize: 10,
-                                      fontWeight: FontWeight.w700,
-                                      letterSpacing: 0.5,
+                                      letterSpacing: 0.3,
                                     ),
-                                  ),
-                                ),
-                                const Spacer(),
-                                Text(
-                                  _formatTime(widget.alert.issuedTime),
-                                  style: TextStyle(
-                                    color: onSurface.withValues(alpha: 0.6),
-                                    fontSize: 11,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 4),
-                            Text(
-                              widget.alert.headline,
-                              style: TextStyle(
-                                color: onSurface,
-                                fontSize: 15,
-                                fontWeight: FontWeight.w700,
-                              ),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
                           ],
-                        ),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
-                  if (widget.alert.description.isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      widget.alert.description,
-                      style: TextStyle(
-                        color: onSurface.withValues(alpha: 0.85),
-                        fontSize: 13,
-                        height: 1.4,
-                      ),
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                  if (widget.alert.location.isNotEmpty) ...[
-                    const SizedBox(height: 6),
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.place_outlined,
-                          size: 12,
-                          color: onSurface.withValues(alpha: 0.55),
-                        ),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: Text(
-                            widget.alert.location,
-                            style: TextStyle(
-                              color: onSurface.withValues(alpha: 0.7),
-                              fontSize: 11,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
                 ],
               ),
             ),
@@ -217,6 +212,6 @@ class _SosAlertBannerState extends State<SosAlertBanner>
 
   static String _formatTime(DateTime t) {
     String two(int n) => n.toString().padLeft(2, '0');
-    return '${two(t.hour)}:${two(t.minute)} ${t.day}/${t.month}';
+    return '${two(t.hour)}:${two(t.minute)} · ${t.day}/${t.month}';
   }
 }

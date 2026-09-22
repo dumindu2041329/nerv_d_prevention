@@ -153,6 +153,8 @@ function corsHeaders(): Record<string, string> {
     return {
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-        "Access-Control-Allow-Headers": "authorization, content-type, apikey",
+        // Wildcard so supabase-js headers (x-client-info, ...) pass
+        // preflight when the app runs on web.
+        "Access-Control-Allow-Headers": "*",
     };
 }

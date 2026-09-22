@@ -14,10 +14,24 @@
 # ═══════════════════════════════════════════════════════════════════
 
 $ErrorActionPreference = "Stop"
-$ProjectRef = "ebccdpydoptajlkmqefx"
 $ProjectRoot = Split-Path -Parent $PSScriptRoot
 $FunctionsDir = Join-Path $ProjectRoot "supabase\functions"
 Set-Location $ProjectRoot
+
+# Project ref comes from SUPABASE_URL in .env so this script never drifts
+# from the project the app actually talks to.
+$EnvFile = Join-Path $ProjectRoot ".env"
+if (-not (Test-Path $EnvFile)) {
+    Write-Host ".env not found at $EnvFile" -ForegroundColor Red
+    exit 1
+}
+$SupabaseUrl = (Get-Content $EnvFile | Select-String -Pattern '^\s*SUPABASE_URL\s*=\s*(.+)$').Matches[0].Groups[1].Value.Trim()
+$ProjectRef = [regex]::Match($SupabaseUrl, 'https://([A-Za-z0-9\-]+)\.supabase\.co').Groups[1].Value
+if (-not $ProjectRef) {
+    Write-Host "Could not parse a project ref from SUPABASE_URL=$SupabaseUrl" -ForegroundColor Red
+    exit 1
+}
+Write-Host "Target project: $ProjectRef" -ForegroundColor Green
 
 function Ensure-Tool {
     param([string]$Name)
@@ -40,8 +54,17 @@ if (-not $env:SUPABASE_ACCESS_TOKEN) {
     exit 1
 }
 
-# Functions to deploy
-$Functions = @("alert-aggregator", "crisis-pins")
+# Functions to deploy. Per-function verify_jwt settings are read from
+# supabase/config.toml — do not pass --no-verify-jwt here or every function
+# would be deployed unauthenticated.
+$Functions = @(
+    "weather",
+    "geocode",
+    "tiles",
+    "contact",
+    "crisis-pins",
+    "alert-aggregator"
+)
 
 foreach ($fn in $Functions) {
     $fnDir = Join-Path $FunctionsDir $fn
@@ -50,7 +73,7 @@ foreach ($fn in $Functions) {
         continue
     }
     Write-Host "Deploying $fn ..." -ForegroundColor Cyan
-    & pwsh -Command "$cliCmd functions deploy $fn --project-ref $ProjectRef --no-verify-jwt"
+    & pwsh -Command "$cliCmd functions deploy $fn --project-ref $ProjectRef"
     if ($LASTEXITCODE -ne 0) {
         Write-Host "  FAILED: $fn" -ForegroundColor Red
     } else {
@@ -59,5 +82,7 @@ foreach ($fn in $Functions) {
 }
 
 Write-Host ""
+Write-Host "Secrets (required once):" -ForegroundColor Cyan
+Write-Host "  $cliCmd secrets set WEATHERAPI_KEY=... MAPTILER_API_KEY=... OWM_API_KEY=... --project-ref $ProjectRef"
 Write-Host "Done. Test with:" -ForegroundColor Cyan
-Write-Host "  Invoke-RestMethod -Method POST -Uri 'https://ebccdpydoptajlkmqefx.supabase.co/functions/v1/alert-aggregator' -Headers @{'Authorization'='Bearer <SERVICE_ROLE_KEY>'}"
+Write-Host "  Invoke-RestMethod -Uri 'https://$ProjectRef.supabase.co/functions/v1/alert-aggregator'"

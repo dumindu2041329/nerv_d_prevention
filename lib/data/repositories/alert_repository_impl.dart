@@ -92,9 +92,9 @@ class AlertRepositoryImpl implements AlertRepository {
     ];
   }
 
-  /// GDACS is the only source, so it returns its events in a stable
-  /// order. We re-sort by [SeverityLevel] (most severe first) so the
-  /// UI can render without further processing.
+  /// The Supabase `alerts` table is the only source, so we re-sort by
+  /// [SeverityLevel] (most severe first) so the UI can render without
+  /// further processing.
   static List<Alert> _sortBySeverity(List<Alert> alerts) {
     final copy = [...alerts];
     copy.sort((a, b) => a.severity.index.compareTo(b.severity.index));

@@ -1,19 +1,18 @@
 import 'dart:async';
 import 'dart:ui';
 
-import 'package:clerk_flutter/clerk_flutter.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'core/constants/app_constants.dart';
 import 'core/di/injection.dart';
 import 'core/router/app_router.dart';
 import 'core/localization/app_localizations.dart';
 import 'core/theme/app_theme.dart';
 import 'presentation/blocs/alerts/alert_bloc.dart';
+import 'presentation/blocs/auth/auth_bloc.dart';
 import 'presentation/blocs/settings/settings_bloc.dart';
+import 'presentation/screens/auth/login_screen.dart';
 
 void main() async {
   // runZonedGuarded catches every uncaught async error in the app — without
@@ -66,6 +65,9 @@ class NERVApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiBlocProvider(
       providers: [
+        // App-wide auth session (Supabase email/password). Created in DI so
+        // the restored session is already being observed.
+        BlocProvider.value(value: getIt<AuthBloc>()),
         BlocProvider.value(
           value: getIt<SettingsBloc>()..add(const LoadSettings()),
         ),
@@ -77,18 +79,10 @@ class NERVApp extends StatelessWidget {
         builder: (context, settingsState) {
           return AppLocalizationScope(
             localizations: AppLocalizations(settingsState.language),
-            child: ClerkAuth(
-              config: ClerkAuthConfig(
-                publishableKey: ApiConstants.clerkPublishableKey,
-              ),
-              child: ClerkErrorListener(
-                child: ClerkAuthBuilder(
-                  signedInBuilder: (context, authState) =>
-                      _buildSignedInApp(settingsState),
-                  signedOutBuilder: (context, authState) =>
-                      _buildSignedOutApp(settingsState),
-                ),
-              ),
+            child: BlocBuilder<AuthBloc, AuthState>(
+              builder: (context, authState) {
+                return _buildApp(settingsState, authState);
+              },
             ),
           );
         },
@@ -96,7 +90,24 @@ class NERVApp extends StatelessWidget {
     );
   }
 
-  Widget _buildSignedInApp(SettingsState settingsState) {
+  Widget _buildApp(SettingsState settingsState, AuthState authState) {
+    if (authState is AuthAuthenticated) {
+      return _buildRouterApp(settingsState);
+    }
+    if (authState is AuthStatusLoading) {
+      return _buildShellApp(
+        settingsState,
+        home: const _SplashScreen(),
+      );
+    }
+    // AuthUnauthenticated
+    return _buildShellApp(
+      settingsState,
+      home: const LoginScreen(),
+    );
+  }
+
+  Widget _buildRouterApp(SettingsState settingsState) {
     return MaterialApp.router(
       title: 'NERV Disaster Prevention',
       debugShowCheckedModeBanner: false,
@@ -116,7 +127,9 @@ class NERVApp extends StatelessWidget {
     );
   }
 
-  Widget _buildSignedOutApp(SettingsState settingsState) {
+  /// A plain [MaterialApp] used for the signed-out / splash states, which
+  /// live outside the authenticated router shell.
+  Widget _buildShellApp(SettingsState settingsState, {required Widget home}) {
     return MaterialApp(
       title: 'NERV Disaster Prevention',
       debugShowCheckedModeBanner: false,
@@ -132,8 +145,40 @@ class NERVApp extends StatelessWidget {
       ),
       themeMode:
           settingsState.isDarkMode ? ThemeMode.dark : ThemeMode.light,
-      home: const Scaffold(
-        body: SafeArea(child: ClerkAuthentication()),
+      home: home,
+    );
+  }
+}
+
+/// Minimal splash shown while the persisted auth session is being resolved.
+class _SplashScreen extends StatelessWidget {
+  const _SplashScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Scaffold(
+      backgroundColor: theme.scaffoldBackgroundColor,
+      body: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.shield_outlined,
+              size: 48,
+              color: theme.colorScheme.primary,
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              height: 22,
+              width: 22,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: theme.colorScheme.primary,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

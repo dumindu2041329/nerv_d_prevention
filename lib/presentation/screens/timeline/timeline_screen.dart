@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_sl_constants.dart';
 import '../../../core/di/injection.dart';
 import '../../../core/utils/weather_alert_deriver.dart';
@@ -12,6 +13,8 @@ import '../../blocs/alerts/alert_bloc.dart';
 import '../../blocs/weather/weather_bloc.dart';
 import '../../widgets/national_local_toggle.dart';
 import '../../widgets/sos_alert_banner.dart';
+import '../../widgets/nerv/nerv_styles.dart';
+import '../../widgets/nerv/deck_header.dart';
 
 class TimelineScreen extends StatefulWidget {
   const TimelineScreen({super.key});
@@ -69,9 +72,24 @@ class _TimelineScreenState extends State<TimelineScreen> {
         body: SafeArea(
           child: Column(
             children: [
-              NationalLocalToggle(
-                isNational: _isIslandWide,
-                onChanged: _onToggleChanged,
+              BlocBuilder<WeatherBloc, WeatherState>(
+                builder: (context, state) {
+                  return DeckHeader(
+                    title: 'Timeline',
+                    eyebrowText: 'SRI LANKA · 72-HR WATCH',
+                    subtitle: _isIslandWide
+                        ? 'Island-wide'
+                        : 'Current location',
+                    posture: _postureFromWeather(state),
+                  );
+                },
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                child: NationalLocalToggle(
+                  isNational: _isIslandWide,
+                  onChanged: _onToggleChanged,
+                ),
               ),
               Expanded(child: _buildTimelineContent(context)),
             ],
@@ -81,15 +99,29 @@ class _TimelineScreenState extends State<TimelineScreen> {
     );
   }
 
+  SeverityLevel _postureFromWeather(WeatherState state) {
+    if (state is! WeatherLoaded) return SeverityLevel.calm;
+    final events = WeatherAlertDeriver.deriveTimelineEvents(
+      state.weatherData,
+      districtName: state.location?.name,
+    );
+    return NervStyles.postureOf(events.map((e) => e.severity).toList());
+  }
+
   Widget _buildTimelineContent(BuildContext context) {
-    return Column(
+    final nerv = context.nerv;
+
+    // One scroll view for the whole screen: SOS banners at the top,
+    // 72-hour timeline below. No nested scrollables.
+    return ListView(
+      padding: const EdgeInsets.only(bottom: 24),
       children: [
-        // SOS alert header — pinned above the timeline list.
+        // ── Active SOS alerts ──
         BlocBuilder<AlertBloc, AlertState>(
           builder: (context, alertState) {
             if (alertState is AlertLoaded && alertState.alerts.isNotEmpty) {
               return Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -101,90 +133,85 @@ class _TimelineScreenState extends State<TimelineScreen> {
             return const SizedBox.shrink();
           },
         ),
-        Expanded(
-          child: BlocBuilder<WeatherBloc, WeatherState>(
-            builder: (context, state) {
-              final l10n = AppLocalizations.of(context);
 
-              if (state is WeatherLoading) {
-                return Center(
+        // ── Timeline events ──
+        BlocBuilder<WeatherBloc, WeatherState>(
+          builder: (context, state) {
+            final l10n = AppLocalizations.of(context);
+
+            if (state is WeatherLoading) {
+              return const Padding(
+                padding: EdgeInsets.symmetric(vertical: 96),
+                child: Center(
                   child: CircularProgressIndicator(
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                );
-              }
-
-              if (state is WeatherError) {
-                final theme = Theme.of(context);
-                return Center(
-                  child: Text(
-                    state.message,
-                    style: TextStyle(
-                      color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
-                      fontSize: 16,
-                    ),
-                  ),
-                );
-              }
-
-              if (state is WeatherLoaded) {
-                final events = WeatherAlertDeriver.deriveTimelineEvents(
-                  state.weatherData,
-                  districtName: state.location?.name,
-                  realLatitude: state.location?.latitude,
-                  realLongitude: state.location?.longitude,
-                );
-                return _buildTimelineList(context, events);
-              }
-
-              final themePlaceholder = Theme.of(context);
-              return Center(
-                child: Text(
-                  l10n.t('timeline.loading'),
-                  style: TextStyle(
-                    color: themePlaceholder.colorScheme.onSurface
-                        .withValues(alpha: 0.5),
-                    fontSize: 14,
+                    strokeWidth: 2,
                   ),
                 ),
               );
-            },
-          ),
+            }
+
+            if (state is WeatherError) {
+              return Padding(
+                padding: const EdgeInsets.fromLTRB(24, 48, 24, 0),
+                child: Text(
+                  state.message,
+                  textAlign: TextAlign.center,
+                  style: nerv.body,
+                ),
+              );
+            }
+
+            if (state is WeatherLoaded) {
+              final events = WeatherAlertDeriver.deriveTimelineEvents(
+                state.weatherData,
+                districtName: state.location?.name,
+                realLatitude: state.location?.latitude,
+                realLongitude: state.location?.longitude,
+              );
+              return _buildTimelineBody(context, events);
+            }
+
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 96),
+              child: Center(
+                child: Text(
+                  l10n.t('timeline.loading'),
+                  style: nerv.dataLabel,
+                ),
+              ),
+            );
+          },
         ),
       ],
     );
   }
 
-  Widget _buildTimelineList(BuildContext context, List<TimelineEvent> events) {
+  /// Non-scrolling timeline body — rendered inside the screen's single
+  /// [ListView]. Empty state shows the "calm" placeholder in line.
+  Widget _buildTimelineBody(BuildContext context, List<TimelineEvent> events) {
     final l10n = AppLocalizations.of(context);
-    final theme = Theme.of(context);
-    final onSurface = theme.colorScheme.onSurface;
+    final nerv = context.nerv;
+    final onSurface = nerv.onSurface;
     final grouped = _groupEventsByDate(events, l10n);
 
     if (grouped.isEmpty) {
-      return Center(
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 64),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              Icons.check_circle_outline,
-              color: onSurface.withValues(alpha: 0.35),
-              size: 48,
-            ),
+            Eyebrow('NO ACTIVE ALERTS'),
             const SizedBox(height: 12),
             Text(
               l10n.t('timeline.noActiveAlerts'),
-              style: TextStyle(
-                color: onSurface.withValues(alpha: 0.65),
-                fontSize: 16,
-              ),
+              style: nerv.headline,
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 6),
             Text(
               l10n.t('timeline.conditionsCalm'),
-              style: TextStyle(
-                color: onSurface.withValues(alpha: 0.45),
-                fontSize: 13,
+              style: nerv.body.copyWith(
+                color: onSurface.withValues(alpha: 0.5),
+                fontSize: 12,
               ),
             ),
           ],
@@ -192,13 +219,11 @@ class _TimelineScreenState extends State<TimelineScreen> {
       );
     }
 
-    return ListView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: 0),
-      itemCount: grouped.length,
-      itemBuilder: (context, index) {
-        final group = grouped[index];
-        return _buildDateGroup(context, group, grouped);
-      },
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final group in grouped) _buildDateGroup(context, group, grouped),
+      ],
     );
   }
 
@@ -211,9 +236,7 @@ class _TimelineScreenState extends State<TimelineScreen> {
 
     return Column(
       children: [
-        // Date separator pill
         _buildDateSeparator(context, group.label),
-        // Events in this group
         ...group.events.asMap().entries.map((entry) {
           final isFirst = entry.key == 0 && groupIndex == 0;
           final isLast =
@@ -226,32 +249,17 @@ class _TimelineScreenState extends State<TimelineScreen> {
   }
 
   Widget _buildDateSeparator(BuildContext context, String label) {
-    final theme = Theme.of(context);
-    final onSurface = theme.colorScheme.onSurface;
+    final nerv = context.nerv;
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      child: Center(
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
-          decoration: BoxDecoration(
-            color: theme.colorScheme.surfaceContainerHighest
-                .withValues(alpha: 0.85),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: theme.dividerTheme.color ??
-                  onSurface.withValues(alpha: 0.1),
-              width: 0.5,
-            ),
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 10),
+      child: Row(
+        children: [
+          Eyebrow(label, color: nerv.onSurface.withValues(alpha: 0.4)),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Container(height: 1, color: nerv.hairline),
           ),
-          child: Text(
-            label,
-            style: TextStyle(
-              color: onSurface,
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ),
+        ],
       ),
     );
   }
@@ -263,77 +271,60 @@ class _TimelineScreenState extends State<TimelineScreen> {
     bool isLast,
   ) {
     final l10n = AppLocalizations.of(context);
-    final theme = Theme.of(context);
-    final onSurface = theme.colorScheme.onSurface;
-    final isHighlighted = isFirst;
+    final nerv = context.nerv;
+    final onSurface = nerv.onSurface;
     final color = event.severity.color;
     final isLifted = event.isLifted;
-    final highlightedBg = theme.brightness == Brightness.dark
-        ? const Color(0xFF1A1A1A)
-        : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.7);
-    final lineColor = onSurface.withValues(alpha: 0.18);
+    final lineColor = onSurface.withValues(alpha: 0.15);
 
     return IntrinsicHeight(
       child: Container(
-        color: isHighlighted ? highlightedBg : Colors.transparent,
         padding: const EdgeInsets.symmetric(horizontal: 16),
         child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Time column (left)
+            // Time column (tabular data)
             SizedBox(
-              width: 52,
+              width: 56,
               child: Padding(
-                padding: const EdgeInsets.only(top: 16),
+                padding: const EdgeInsets.only(top: 14),
                 child: Text(
                   DateTimeUtils.formatTime(event.time),
-                  style: TextStyle(
-                    color: onSurface.withValues(alpha: 0.65),
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
+                  style: nerv.numeralSmall(size: 13).copyWith(
+                    color: onSurface.withValues(alpha: 0.7),
                   ),
                   textAlign: TextAlign.right,
                 ),
               ),
             ),
-            // Timeline line + dot
+            // Severity rail — 2px tick + connector line
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12),
               child: Column(
                 children: [
-                  // Top connector line
-                  Container(
-                    width: 1.5,
-                    height: 16,
-                    color: isFirst ? Colors.transparent : lineColor,
-                  ),
-                  // Circle dot with severity color
-                  Container(
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: isLifted
-                          ? theme.scaffoldBackgroundColor
-                          : color.withValues(alpha: 0.12),
-                      border: Border.all(
-                        color: isLifted
-                            ? onSurface.withValues(alpha: 0.3)
-                            : color.withValues(alpha: 0.55),
+                  SizedBox(
+                    height: isFirst ? 10 : 8,
+                    child: Align(
+                      alignment: Alignment.topCenter,
+                      child: Container(
                         width: 1.5,
-                      ),
-                    ),
-                    child: Center(
-                      child: Icon(
-                        _getEventIcon(event.type),
-                        size: 16,
-                        color: isLifted
-                            ? onSurface.withValues(alpha: 0.45)
-                            : color.withValues(alpha: 0.85),
+                        height: 8,
+                        color: isFirst ? Colors.transparent : lineColor,
                       ),
                     ),
                   ),
-                  // Bottom connector line
+                  // Severity marker (square tick, echoing the state line)
+                  Container(
+                    width: 10,
+                    height: 10,
+                    margin: const EdgeInsets.symmetric(vertical: 6),
+                    decoration: BoxDecoration(
+                      color: isLifted
+                          ? onSurface.withValues(alpha: 0.25)
+                          : color,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
                   Expanded(
                     child: Container(
                       width: 1.5,
@@ -343,10 +334,10 @@ class _TimelineScreenState extends State<TimelineScreen> {
                 ],
               ),
             ),
-            // Content (right)
+            // Content
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.only(top: 12, bottom: 16),
+                padding: const EdgeInsets.only(top: 10, bottom: 16),
                 child: InkWell(
                   onTap: () {
                     context.push('/timeline-event-detail', extra: event);
@@ -359,14 +350,20 @@ class _TimelineScreenState extends State<TimelineScreen> {
                           children: [
                             Row(
                               children: [
-                                Text(
-                                  _getEventTypeLabel(event.type, l10n),
-                                  style: TextStyle(
-                                    color: isLifted
-                                        ? onSurface.withValues(alpha: 0.55)
-                                        : color,
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w700,
+                                Expanded(
+                                  child: Text(
+                                    _getEventTypeLabel(event.type, l10n)
+                                        .toUpperCase(),
+                                    style: TextStyle(
+                                      color: isLifted
+                                          ? onSurface.withValues(alpha: 0.4)
+                                          : color,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                      letterSpacing: 1.3,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
                                 if (isLifted) ...[
@@ -386,33 +383,37 @@ class _TimelineScreenState extends State<TimelineScreen> {
                                       ).t('timeline.info'),
                                       style: TextStyle(
                                         color: onSurface.withValues(alpha: 0.6),
-                                        fontSize: 10,
+                                        fontSize: 9,
                                         fontWeight: FontWeight.w600,
+                                        letterSpacing: 1,
                                       ),
                                     ),
                                   ),
                                 ],
                               ],
                             ),
-                            const SizedBox(height: 2),
+                            const SizedBox(height: 4),
                             Text(
                               event.title,
                               style: TextStyle(
                                 color: isLifted
                                     ? onSurface.withValues(alpha: 0.35)
-                                    : onSurface.withValues(alpha: 0.65),
+                                    : onSurface.withValues(alpha: 0.8),
                                 fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                                height: 1.3,
                               ),
-                              maxLines: 1,
+                              maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                             ),
                           ],
                         ),
                       ),
+                      const SizedBox(width: 8),
                       Icon(
                         Icons.chevron_right,
-                        color: onSurface.withValues(alpha: 0.35),
-                        size: 22,
+                        color: onSurface.withValues(alpha: 0.3),
+                        size: 20,
                       ),
                     ],
                   ),
@@ -447,28 +448,6 @@ class _TimelineScreenState extends State<TimelineScreen> {
         return l10n.t('timeline.event.earthquake');
       default:
         return l10n.t('timeline.info');
-    }
-  }
-
-  IconData _getEventIcon(String type) {
-    switch (type) {
-      case 'flood':
-        return Icons.water;
-      case 'landslide':
-        return Icons.terrain;
-      case 'cyclone':
-        return Icons.cyclone;
-      case 'lightning':
-        return Icons.bolt;
-      case 'coastal':
-      case 'coastalWarning':
-        return Icons.beach_access;
-      case 'tsunami':
-        return Icons.waves;
-      case 'earthquake':
-        return Icons.public;
-      default:
-        return Icons.info;
     }
   }
 

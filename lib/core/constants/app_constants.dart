@@ -4,10 +4,8 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 class ApiConstants {
   // API keys for weather + map providers are no longer stored in the
   // client. They live as Supabase Secrets and are accessed only by
-  // Edge Functions. Keep Clerk publishable key here (it's designed to
-  // be public).
-  static String get clerkPublishableKey =>
-      dotenv.get('CLERK_PUBLISHABLE_KEY', fallback: '');
+  // Edge Functions. Authentication now runs through Supabase Auth
+  // (email/password) — see SupabaseService.
 
   // Upstream provider URLs are retained for documentation only.
   // All client traffic now flows through Supabase Edge Functions.

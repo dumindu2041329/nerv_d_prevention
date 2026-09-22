@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import '../../../core/constants/constants.dart';
+import '../../../core/constants/app_colors.dart';
 import '../../../core/localization/app_localizations.dart';
 import '../../blocs/settings/settings_bloc.dart';
+import '../../widgets/nerv/nerv_styles.dart';
+import '../../widgets/nerv/deck_header.dart';
+import '../../widgets/nerv/island_mark.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -15,7 +18,12 @@ class SettingsScreen extends StatelessWidget {
           builder: (context, state) {
             return CustomScrollView(
               slivers: [
-                SliverToBoxAdapter(child: _buildHeader(context)),
+                SliverToBoxAdapter(
+                  child: DeckHeader(
+                    title: 'Settings',
+                    eyebrowText: 'SRI LANKA · CONFIG',
+                  ),
+                ),
                 SliverToBoxAdapter(
                   child: _buildAccessibilitySection(context, state),
                 ),
@@ -32,59 +40,33 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildHeader(BuildContext context) {
-    final theme = Theme.of(context);
-    final l10n = AppLocalizations.of(context);
-
-    return Container(
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.space5,
-        AppSpacing.space4,
-        AppSpacing.space5,
-        AppSpacing.space2,
-      ),
-      child: Row(
-        children: [
-          Text(
-            l10n.t('settings.title'),
-            style: theme.textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildAccessibilitySection(BuildContext context, SettingsState state) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
 
     return Padding(
-      padding: const EdgeInsets.all(AppSpacing.space5),
+      padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildSectionHeader(
-            context,
-            title: l10n.t('settings.accessibility'),
-            subtitle: l10n.t('settings.displayText'),
-            icon: Icons.accessibility_new,
+          Eyebrow(l10n.t('settings.accessibility')),
+          const SizedBox(height: 3),
+          Text(
+            l10n.t('settings.displayText'),
+            style: context.nerv.dataLabel,
           ),
-          const SizedBox(height: AppSpacing.space3),
+          const SizedBox(height: 12),
           Container(
             decoration: BoxDecoration(
               color: theme.colorScheme.surface,
-              borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-              border: Border.all(
-                color: theme.dividerTheme.color ?? Colors.grey,
-              ),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFF2A2A2A), width: 1),
             ),
             child: Column(
               children: [
                 _buildSettingsTile(
                   context,
-                  icon: Icons.dark_mode,
+                  icon: Icons.dark_mode_outlined,
                   title: l10n.t('settings.darkMode'),
                   trailing: Switch(
                     value: state.isDarkMode,
@@ -94,7 +76,7 @@ class SettingsScreen extends StatelessWidget {
                     activeThumbColor: theme.colorScheme.primary,
                   ),
                 ),
-                Divider(height: 1, color: theme.dividerTheme.color),
+                _divider(context),
                 _buildSettingsTile(
                   context,
                   icon: Icons.text_fields,
@@ -102,7 +84,7 @@ class SettingsScreen extends StatelessWidget {
                   subtitle: 'Font Size: ${state.textSizeScale.label}',
                   onTap: () => _showTextSizeSelector(context, state),
                 ),
-                Divider(height: 1, color: theme.dividerTheme.color),
+                _divider(context),
                 _buildSettingsTile(
                   context,
                   icon: Icons.format_size,
@@ -111,7 +93,7 @@ class SettingsScreen extends StatelessWidget {
                       'Font Weight: ${_getFontWeightLabel(state.fontWeightScale)}',
                   onTap: () => _showFontWeightSelector(context, state),
                 ),
-                Divider(height: 1, color: theme.dividerTheme.color),
+                _divider(context),
                 _buildSettingsTile(
                   context,
                   icon: Icons.palette_outlined,
@@ -119,7 +101,7 @@ class SettingsScreen extends StatelessWidget {
                   subtitle: 'Colour Vision: ${state.colourVisionMode.label}',
                   onTap: () => _showColourVisionSelector(context, state),
                 ),
-                Divider(height: 1, color: theme.dividerTheme.color),
+                _divider(context),
                 _buildSettingsTile(
                   context,
                   icon: Icons.contrast,
@@ -140,24 +122,22 @@ class SettingsScreen extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.space5),
+      padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildSectionHeader(
-            context,
-            title: l10n.t('settings.notifications'),
-            subtitle: l10n.t('settings.alertSettings'),
-            icon: Icons.notifications_outlined,
+          Eyebrow(l10n.t('settings.notifications')),
+          const SizedBox(height: 3),
+          Text(
+            l10n.t('settings.alertSettings'),
+            style: context.nerv.dataLabel,
           ),
-          const SizedBox(height: AppSpacing.space3),
+          const SizedBox(height: 12),
           Container(
             decoration: BoxDecoration(
               color: theme.colorScheme.surface,
-              borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-              border: Border.all(
-                color: theme.dividerTheme.color ?? Colors.grey,
-              ),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFF2A2A2A), width: 1),
             ),
             child: Column(
               children: [
@@ -168,7 +148,7 @@ class SettingsScreen extends StatelessWidget {
                   value: true,
                   onChanged: (_) {},
                 ),
-                Divider(height: 1, color: theme.dividerTheme.color),
+                _divider(context),
                 _buildNotificationToggle(
                   context,
                   title: l10n.t('settings.floodAlerts'),
@@ -176,7 +156,7 @@ class SettingsScreen extends StatelessWidget {
                   value: true,
                   onChanged: (_) {},
                 ),
-                Divider(height: 1, color: theme.dividerTheme.color),
+                _divider(context),
                 _buildNotificationToggle(
                   context,
                   title: l10n.t('settings.landslideAlerts'),
@@ -184,7 +164,7 @@ class SettingsScreen extends StatelessWidget {
                   value: true,
                   onChanged: (_) {},
                 ),
-                Divider(height: 1, color: theme.dividerTheme.color),
+                _divider(context),
                 _buildNotificationToggle(
                   context,
                   title: l10n.t('settings.cycloneAdvisories'),
@@ -192,7 +172,7 @@ class SettingsScreen extends StatelessWidget {
                   value: true,
                   onChanged: (_) {},
                 ),
-                Divider(height: 1, color: theme.dividerTheme.color),
+                _divider(context),
                 _buildNotificationToggle(
                   context,
                   title: l10n.t('settings.lightningAlerts'),
@@ -200,7 +180,7 @@ class SettingsScreen extends StatelessWidget {
                   value: true,
                   onChanged: (_) {},
                 ),
-                Divider(height: 1, color: theme.dividerTheme.color),
+                _divider(context),
                 _buildNotificationToggle(
                   context,
                   title: l10n.t('settings.coastalWarnings'),
@@ -208,7 +188,7 @@ class SettingsScreen extends StatelessWidget {
                   value: true,
                   onChanged: (_) {},
                 ),
-                Divider(height: 1, color: theme.dividerTheme.color),
+                _divider(context),
                 _buildNotificationToggle(
                   context,
                   title: l10n.t('settings.tsunamiBulletins'),
@@ -229,24 +209,22 @@ class SettingsScreen extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
 
     return Padding(
-      padding: const EdgeInsets.all(AppSpacing.space5),
+      padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildSectionHeader(
-            context,
-            title: l10n.t('settings.about'),
-            subtitle: l10n.t('settings.appInformation'),
-            icon: Icons.info_outline,
+          Eyebrow(l10n.t('settings.about')),
+          const SizedBox(height: 3),
+          Text(
+            l10n.t('settings.appInformation'),
+            style: context.nerv.dataLabel,
           ),
-          const SizedBox(height: AppSpacing.space3),
+          const SizedBox(height: 12),
           Container(
             decoration: BoxDecoration(
               color: theme.colorScheme.surface,
-              borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-              border: Border.all(
-                color: theme.dividerTheme.color ?? Colors.grey,
-              ),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFF2A2A2A), width: 1),
             ),
             child: Column(
               children: [
@@ -256,14 +234,14 @@ class SettingsScreen extends StatelessWidget {
                   title: l10n.t('settings.aboutNerv'),
                   onTap: () => _showAboutDialog(context),
                 ),
-                Divider(height: 1, color: theme.dividerTheme.color),
+                _divider(context),
                 _buildSettingsTile(
                   context,
                   icon: Icons.privacy_tip_outlined,
                   title: l10n.t('settings.privacyPolicy'),
                   onTap: () {},
                 ),
-                Divider(height: 1, color: theme.dividerTheme.color),
+                _divider(context),
                 _buildSettingsTile(
                   context,
                   icon: Icons.description_outlined,
@@ -279,97 +257,64 @@ class SettingsScreen extends StatelessWidget {
   }
 
   Widget _buildFooter(BuildContext context) {
-    final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
+    final nerv = context.nerv;
 
     return Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.space5,
-        vertical: AppSpacing.space4,
-      ),
+      padding: const EdgeInsets.fromLTRB(20, 32, 20, 32),
       child: Column(
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Container(
-                width: 6,
-                height: 6,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: SeverityLevel.calm.color,
-                ),
+              IslandMark(
+                size: 12,
+                color: SeverityLevel.calm.color,
               ),
-              const SizedBox(width: AppSpacing.space2),
+              const SizedBox(width: 8),
               Text(
-                'NERV — Sri Lanka',
-                style: theme.textTheme.titleSmall?.copyWith(
+                'NERV — SRI LANKA',
+                style: TextStyle(
+                  color: nerv.onSurface.withValues(alpha: 0.7),
+                  fontSize: 11,
                   fontWeight: FontWeight.w700,
-                  letterSpacing: 1,
+                  letterSpacing: 1.4,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: AppSpacing.space2),
+          const SizedBox(height: 8),
           Text(
             l10n.t('settings.version'),
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
-            ),
+            style: nerv.dataLabel.copyWith(fontSize: 10),
           ),
-          const SizedBox(height: AppSpacing.space2),
+          const SizedBox(height: 4),
           Text(
             l10n.t('settings.weatherOpenMeteo'),
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
-              fontSize: 10,
+            style: nerv.dataLabel.copyWith(
+              color: nerv.onSurface.withValues(alpha: 0.35),
+              fontSize: 9,
             ),
           ),
-          const SizedBox(height: AppSpacing.space1),
+          const SizedBox(height: 2),
           Text(
             l10n.t('settings.alertsDmc'),
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
-              fontSize: 10,
+            style: nerv.dataLabel.copyWith(
+              color: nerv.onSurface.withValues(alpha: 0.35),
+              fontSize: 9,
             ),
           ),
-          const SizedBox(height: AppSpacing.space8),
+          const SizedBox(height: 16),
+          Container(height: 1, color: nerv.hairline),
         ],
       ),
     );
   }
 
-  Widget _buildSectionHeader(
-    BuildContext context, {
-    required String title,
-    required String subtitle,
-    required IconData icon,
-  }) {
-    final theme = Theme.of(context);
-
-    return Row(
-      children: [
-        Icon(icon, size: 20, color: theme.colorScheme.primary),
-        const SizedBox(width: AppSpacing.space3),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              title,
-              style: theme.textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            Text(
-              subtitle,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
-                fontSize: 11,
-              ),
-            ),
-          ],
-        ),
-      ],
+  Widget _divider(BuildContext context) {
+    return Container(
+      height: 1,
+      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.06),
     );
   }
 
@@ -381,6 +326,7 @@ class SettingsScreen extends StatelessWidget {
     Widget? trailing,
     VoidCallback? onTap,
   }) {
+    final nerv = context.nerv;
     final theme = Theme.of(context);
 
     return Material(
@@ -388,37 +334,31 @@ class SettingsScreen extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.space4),
+          padding: const EdgeInsets.fromLTRB(16, 13, 16, 13),
           child: Row(
             children: [
-              Container(
-                padding: const EdgeInsets.all(AppSpacing.space2),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.primary.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
-                ),
-                child: Icon(icon, size: 20, color: theme.colorScheme.primary),
+              Icon(
+                icon,
+                size: 18,
+                color: theme.colorScheme.primary.withValues(alpha: 0.9),
               ),
-              const SizedBox(width: AppSpacing.space4),
+              const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       title,
-                      style: theme.textTheme.bodyMedium?.copyWith(
+                      style: TextStyle(
+                        color: nerv.onSurface,
+                        fontSize: 14,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
                     if (subtitle != null)
                       Text(
                         subtitle,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurface.withValues(
-                            alpha: 0.5,
-                          ),
-                          fontSize: 11,
-                        ),
+                        style: nerv.dataLabel.copyWith(fontSize: 11),
                       ),
                   ],
                 ),
@@ -426,8 +366,8 @@ class SettingsScreen extends StatelessWidget {
               trailing ??
                   Icon(
                     Icons.chevron_right,
-                    size: 20,
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
+                    size: 18,
+                    color: nerv.onSurface.withValues(alpha: 0.3),
                   ),
             ],
           ),
@@ -443,13 +383,11 @@ class SettingsScreen extends StatelessWidget {
     required bool value,
     required ValueChanged<bool> onChanged,
   }) {
+    final nerv = context.nerv;
     final theme = Theme.of(context);
 
     return Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.space4,
-        vertical: AppSpacing.space2,
-      ),
+      padding: const EdgeInsets.fromLTRB(16, 10, 8, 10),
       child: Row(
         children: [
           Expanded(
@@ -458,16 +396,15 @@ class SettingsScreen extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: theme.textTheme.bodyMedium?.copyWith(
+                  style: TextStyle(
+                    color: nerv.onSurface,
+                    fontSize: 14,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
                 Text(
                   subtitle,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
-                    fontSize: 11,
-                  ),
+                  style: nerv.dataLabel.copyWith(fontSize: 11),
                 ),
               ],
             ),
@@ -496,7 +433,7 @@ class SettingsScreen extends StatelessWidget {
   void _showTextSizeSelector(BuildContext context, SettingsState state) {
     _showSelectorSheet(
       context,
-      title: 'Text Size',
+      title: 'TEXT SIZE',
       options: TextSizeScale.values,
       currentValue: state.textSizeScale,
       labelBuilder: (scale) => scale.label,
@@ -509,7 +446,7 @@ class SettingsScreen extends StatelessWidget {
   void _showFontWeightSelector(BuildContext context, SettingsState state) {
     _showSelectorSheet(
       context,
-      title: 'Font Weight',
+      title: 'FONT WEIGHT',
       options: FontWeightScale.values,
       currentValue: state.fontWeightScale,
       labelBuilder: (scale) => _getFontWeightLabel(scale),
@@ -522,7 +459,7 @@ class SettingsScreen extends StatelessWidget {
   void _showColourVisionSelector(BuildContext context, SettingsState state) {
     _showSelectorSheet(
       context,
-      title: 'Colour Vision',
+      title: 'COLOUR VISION',
       options: ColourVisionMode.values,
       currentValue: state.colourVisionMode,
       labelBuilder: (mode) => mode.label,
@@ -535,7 +472,7 @@ class SettingsScreen extends StatelessWidget {
   void _showContrastSelector(BuildContext context, SettingsState state) {
     _showSelectorSheet(
       context,
-      title: 'Contrast',
+      title: 'CONTRAST',
       options: ContrastMode.values,
       currentValue: state.contrastMode,
       labelBuilder: (mode) => mode.label,
@@ -554,18 +491,17 @@ class SettingsScreen extends StatelessWidget {
     required ValueChanged<T> onSelected,
   }) {
     final theme = Theme.of(context);
+    final nerv = context.nerv;
 
     showModalBottomSheet(
       context: context,
       backgroundColor: theme.colorScheme.surface,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(AppSpacing.radiusLg),
-        ),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
       builder: (context) {
         return Padding(
-          padding: const EdgeInsets.all(AppSpacing.space5),
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 0),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -573,59 +509,56 @@ class SettingsScreen extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        style: theme.textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
+                  Eyebrow(title, color: nerv.onSurface.withValues(alpha: 0.6)),
                   IconButton(
-                    icon: const Icon(Icons.close),
+                    visualDensity: VisualDensity.compact,
+                    icon: const Icon(Icons.close, size: 20),
                     onPressed: () => Navigator.pop(context),
                   ),
                 ],
               ),
-              const SizedBox(height: AppSpacing.space4),
+              const SizedBox(height: 12),
               Flexible(
                 child: SingleChildScrollView(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
-                    children: options.map((option) {
+                    children: options.asMap().entries.map((entry) {
+                      final index = entry.key;
+                      final option = entry.value;
                       final isSelected = option == currentValue;
                       return Material(
-                        color: isSelected
-                            ? theme.colorScheme.primary.withValues(alpha: 0.1)
-                            : Colors.transparent,
-                        borderRadius: BorderRadius.circular(
-                          AppSpacing.radiusMd,
-                        ),
+                        color: Colors.transparent,
                         child: InkWell(
                           onTap: () {
                             onSelected(option);
                             Navigator.pop(context);
                           },
-                          borderRadius: BorderRadius.circular(
-                            AppSpacing.radiusMd,
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.all(AppSpacing.space4),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 13),
+                            decoration: BoxDecoration(
+                              border: index == options.length - 1
+                                  ? null
+                                  : Border(
+                                      bottom: BorderSide(
+                                        color: nerv.onSurface
+                                            .withValues(alpha: 0.06),
+                                        width: 0.5,
+                                      ),
+                                    ),
+                            ),
                             child: Row(
                               children: [
                                 Expanded(
                                   child: Text(
                                     labelBuilder(option),
-                                    style: theme.textTheme.bodyMedium?.copyWith(
+                                    style: TextStyle(
                                       fontWeight: isSelected
                                           ? FontWeight.w600
-                                          : FontWeight.normal,
+                                          : FontWeight.w400,
+                                      fontSize: 14,
                                       color: isSelected
                                           ? theme.colorScheme.primary
-                                          : theme.colorScheme.onSurface,
+                                          : nerv.onSurface.withValues(alpha: 0.8),
                                     ),
                                   ),
                                 ),
@@ -633,7 +566,7 @@ class SettingsScreen extends StatelessWidget {
                                   Icon(
                                     Icons.check,
                                     color: theme.colorScheme.primary,
-                                    size: 20,
+                                    size: 18,
                                   ),
                               ],
                             ),
@@ -644,7 +577,7 @@ class SettingsScreen extends StatelessWidget {
                   ),
                 ),
               ),
-              SizedBox(height: MediaQuery.of(context).padding.bottom),
+              const SizedBox(height: 16),
             ],
           ),
         );
@@ -654,6 +587,7 @@ class SettingsScreen extends StatelessWidget {
 
   void _showAboutDialog(BuildContext context) {
     final theme = Theme.of(context);
+    final nerv = context.nerv;
 
     showDialog(
       context: context,
@@ -661,46 +595,35 @@ class SettingsScreen extends StatelessWidget {
         return AlertDialog(
           backgroundColor: theme.colorScheme.surface,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+            borderRadius: BorderRadius.circular(14),
+            side: const BorderSide(color: Color(0xFF2A2A2A), width: 1),
           ),
+          titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
           title: Row(
             children: [
-              Container(
-                width: 8,
-                height: 8,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: SeverityLevel.calm.color,
-                ),
-              ),
-              const SizedBox(width: AppSpacing.space3),
-              Text(
-                'NERV',
-                style: theme.textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 1,
-                ),
-              ),
+              IslandMark(size: 16, color: SeverityLevel.calm.color),
+              const SizedBox(width: 10),
+              Eyebrow('NERV — SRI LANKA'),
             ],
           ),
+          contentPadding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Version 1.0.0', style: theme.textTheme.bodyMedium),
-              const SizedBox(height: AppSpacing.space4),
+              Text('Version 1.0.0', style: nerv.dataLabel),
+              const SizedBox(height: 12),
               Text(
-                'NERV Disaster Prevention App delivers real-time alerts for earthquakes, tsunamis, volcanic eruptions, and special warnings. Weather and hazard information is optimized based on your current location or registered locations.',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
-                ),
+                'NERV Disaster Prevention App delivers real-time alerts for '
+                'earthquakes, tsunamis, volcanic eruptions, and special '
+                'warnings. Weather and hazard information is optimized based '
+                'on your current location or registered locations.',
+                style: nerv.body.copyWith(fontSize: 12.5),
               ),
-              const SizedBox(height: AppSpacing.space4),
+              const SizedBox(height: 12),
               Text(
                 'Weather data provided by WeatherAPI.com.',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
-                ),
+                style: nerv.dataLabel.copyWith(fontSize: 10),
               ),
             ],
           ),

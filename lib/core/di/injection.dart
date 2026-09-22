@@ -4,6 +4,8 @@ import '../../data/remote/alerts/sos_alert_api_client.dart';
 import '../../data/remote/contact/contact_api_client.dart';
 import '../../data/repositories/landslide_repository_impl.dart';
 import '../../domain/repositories/landslide_repository.dart';
+import '../../data/repositories/auth_repository_impl.dart';
+import '../../domain/repositories/auth_repository.dart';
 import '../../data/remote/weatherapi/weather_api_client.dart';
 import '../../data/remote/maptiler/maptiler_geocoding_client.dart';
 import '../../data/remote/supabase/supabase_service.dart';
@@ -15,6 +17,7 @@ import '../../domain/repositories/alert_repository.dart';
 import '../../domain/repositories/weather_repository.dart';
 import '../../domain/repositories/settings_repository.dart';
 import '../../presentation/blocs/alerts/alert_bloc.dart';
+import '../../presentation/blocs/auth/auth_bloc.dart';
 import '../../presentation/blocs/weather/weather_bloc.dart';
 import '../../presentation/blocs/settings/settings_bloc.dart';
 import '../notifications/local_notification_service.dart';
@@ -28,6 +31,16 @@ Future<void> initDependencies() async {
   final supabaseService = SupabaseService();
   await supabaseService.init();
   getIt.registerSingleton<SupabaseService>(supabaseService);
+
+  // 1b) Authentication (email/password via Supabase Auth) + the app-wide
+  //     AuthBloc. The bloc is a singleton so the restored session drives the
+  //     UI for the entire app lifetime.
+  getIt.registerSingleton<AuthRepository>(
+    AuthRepositoryImpl(supabase: supabaseService),
+  );
+  getIt.registerSingleton<AuthBloc>(
+    AuthBloc(repository: getIt<AuthRepository>()),
+  );
 
   // 2) Local cache (Hive) — unchanged from before the migration.
   await Hive.initFlutter();

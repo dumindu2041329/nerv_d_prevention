@@ -1,10 +1,11 @@
 import '../../../domain/entities/alert.dart';
 
-/// Abstraction over the SOS / disaster-alert data pipeline.
+/// Abstraction over the disaster-alert data pipeline.
 ///
 /// Implementations are responsible for fetching alerts from an upstream
-/// source (currently GDACS) and persisting them locally so the app
-/// remains functional offline. The UI consumes only this interface.
+/// source (the Supabase `alerts` table, populated by the alert-aggregator
+/// Edge Function) and persisting them locally so the app remains
+/// functional offline. The UI consumes only this interface.
 abstract class AlertRepository {
   /// Returns the current set of active alerts, sorted by severity
   /// (most severe first). May return cached data if the upstream call

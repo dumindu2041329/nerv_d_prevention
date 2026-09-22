@@ -5,6 +5,8 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../core/di/injection.dart';
 import '../../../core/router/app_router.dart';
 import '../../../data/local/hive/hive_service.dart';
+import '../../widgets/nerv/nerv_styles.dart';
+import '../../widgets/nerv/island_mark.dart';
 
 class LocationGateScreen extends StatefulWidget {
   const LocationGateScreen({super.key});
@@ -88,7 +90,10 @@ class _LocationGateScreenState extends State<LocationGateScreen>
               ),
               child: Text(
                 'Continue Anyway',
-                style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600),
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
             ElevatedButton(
@@ -106,7 +111,10 @@ class _LocationGateScreenState extends State<LocationGateScreen>
               ),
               child: Text(
                 'Open Settings',
-                style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600),
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
           ],
@@ -158,96 +166,112 @@ class _LocationGateScreenState extends State<LocationGateScreen>
 
   @override
   Widget build(BuildContext context) {
+    final accent = const Color(0xFF00BCD4);
+
     return Scaffold(
       backgroundColor: const Color(0xFF000000),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 32),
-          child: Column(
-            children: [
-              const Spacer(flex: 2),
-              Icon(
-                Icons.my_location,
-                size: 72,
-                color: const Color(0xFF00BCD4),
-              ),
-              const SizedBox(height: 24),
-              Text(
-                'Enable Location Access',
-                style: GoogleFonts.inter(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w700,
-                  color: const Color(0xFFF0F2F8),
-                ),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'Your location helps deliver personalised disaster alerts, '
-                'local weather forecasts, and real-time hazard maps for '
-                'your area.',
-                textAlign: TextAlign.center,
-                style: GoogleFonts.inter(
-                  fontSize: 14,
-                  height: 1.5,
-                  color: const Color(0xFF8B95B0),
-                ),
-              ),
-              const SizedBox(height: 32),
-              SizedBox(
-                width: double.infinity,
-                height: 48,
-                child: ElevatedButton(
-                  onPressed: _processing ? null : _handleEnable,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF00BCD4),
-                    foregroundColor: const Color(0xFF000000),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+        child: Column(
+          children: [
+            // Severity ladder strip (deck signature).
+            Row(
+              children: [
+                for (final level in NervStyles.ladder)
+                  Expanded(child: Container(height: 2, color: level.color)),
+              ],
+            ),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 32),
+                child: Column(
+                  children: [
+                    const Spacer(flex: 2),
+                    IslandMark(size: 72, color: accent),
+                    const SizedBox(height: 20),
+                    Eyebrow('NERV — SRI LANKA', color: const Color(0xFF8B95B0)),
+                    const SizedBox(height: 14),
+                    Text(
+                      'Enable Location Access',
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.inter(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w700,
+                        color: const Color(0xFFF0F2F8),
+                      ),
                     ),
-                    elevation: 0,
-                  ),
-                  child: _processing
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Color(0xFF000000),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Your location helps deliver personalised disaster '
+                      'alerts, local weather forecasts, and real-time hazard '
+                      'maps for your area.',
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.inter(
+                        fontSize: 14,
+                        height: 1.5,
+                        color: const Color(0xFF8B95B0),
+                      ),
+                    ),
+                    const SizedBox(height: 32),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: ElevatedButton(
+                        onPressed: _processing ? null : _handleEnable,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: accent,
+                          foregroundColor: const Color(0xFF000000),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
                           ),
-                        )
-                      : Text(
-                          'Enable Location',
-                          style: GoogleFonts.inter(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
+                          elevation: 0,
+                        ),
+                        child: _processing
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Color(0xFF000000),
+                                ),
+                              )
+                            : Text(
+                                'ENABLE LOCATION',
+                                style: GoogleFonts.inter(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 1.2,
+                                ),
+                              ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: TextButton(
+                        onPressed: _processing ? null : _handleSkip,
+                        style: TextButton.styleFrom(
+                          foregroundColor: const Color(0xFF8B95B0),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
                           ),
                         ),
+                        child: Text(
+                          'SKIP',
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const Spacer(flex: 1),
+                  ],
                 ),
               ),
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                height: 48,
-                child: TextButton(
-                  onPressed: _processing ? null : _handleSkip,
-                  style: TextButton.styleFrom(
-                    foregroundColor: const Color(0xFF8B95B0),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: Text(
-                    'Skip',
-                    style: GoogleFonts.inter(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ),
-              const Spacer(flex: 1),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

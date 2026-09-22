@@ -9,7 +9,7 @@
 //   Body: { latitude: 7.8731, longitude: 80.7718 }
 // ============================================================================
 
-// @ts-expect-error — Deno runtime, remote import.
+// Deno runtime globals (Deno, FetchEvent, Response, …)
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 const WEATHER_API_KEY = Deno.env.get("WEATHERAPI_KEY");
@@ -27,7 +27,9 @@ Deno.serve(async (req) => {
             headers: {
                 "Access-Control-Allow-Origin": "*",
                 "Access-Control-Allow-Methods": "POST, OPTIONS",
-                "Access-Control-Allow-Headers": "authorization, content-type, apikey",
+                // Wildcard so supabase-js headers (x-client-info, ...) pass
+                // preflight when the app runs on web.
+                "Access-Control-Allow-Headers": "*",
                 "Access-Control-Max-Age": "86400",
             },
         });

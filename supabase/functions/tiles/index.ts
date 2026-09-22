@@ -17,7 +17,7 @@
 // OWM variants to keep the URL template short for Flutter.
 // ============================================================================
 
-// @ts-expect-error — Deno runtime
+// Deno runtime globals (Deno, FetchEvent, Response, …)
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 const MAPTILER_KEY = Deno.env.get("MAPTILER_API_KEY");

@@ -16,8 +16,5 @@
     "forceConsistentCasingInFileNames": true,
     "types": []
   },
-  "include": [
-    "supabase/functions/alert-aggregator/index.ts",
-    "supabase/functions/crisis-pins/index.ts"
-  ]
+  "include": ["globals.d.ts", "*/index.ts"]
 }

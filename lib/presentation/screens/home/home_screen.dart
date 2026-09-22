@@ -15,6 +15,10 @@ import '../../blocs/weather/weather_bloc.dart';
 import '../../widgets/national_local_toggle.dart';
 import '../../widgets/sos_alert_banner.dart';
 import '../../widgets/stale_data_banner.dart';
+import '../../widgets/nerv/nerv_styles.dart';
+import '../../widgets/nerv/posture_gauge.dart';
+import '../../widgets/nerv/island_mark.dart';
+import '../../widgets/nerv/deck_header.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -97,59 +101,14 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
         backgroundColor: theme.scaffoldBackgroundColor,
         body: Stack(
           children: [
-            // Background: top toggle bar + map
             Positioned.fill(
               child: Column(
                 children: [
-                  // Top toggle bar — Island-wide / Local + SOS fetch button
-                  SafeArea(
-                    bottom: false,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: NationalLocalToggle(
-                              isNational: _isIslandWide,
-                              onChanged: _onToggleChanged,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          ElevatedButton.icon(
-                            onPressed: () {
-                              context.read<AlertBloc>().add(
-                                const RefreshAlerts(),
-                              );
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFFFF1744),
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 10,
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
-                            icon: const Icon(Icons.sos_outlined),
-                            label: Text(
-                              'SOS Alerts',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
+                  _buildTopOverlay(context),
                   Expanded(child: _buildMapSection(context)),
                 ],
               ),
             ),
-            // Draggable bottom sheet with weather + alerts
             DraggableScrollableSheet(
               initialChildSize: 0.45,
               minChildSize: 0.25,
@@ -158,11 +117,116 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
               snapSizes: const [0.25, 0.45, 0.85],
               controller: _sheetController,
               builder: (context, scrollController) {
-                return _buildWeatherAlertSheet(
-                  context,
-                  scrollController,
-                );
+                return _buildWeatherAlertSheet(context, scrollController);
               },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── Top overlay: posture header + mode switch ─────────────────────
+
+  Widget _buildTopOverlay(BuildContext context) {
+    final nerv = context.nerv;
+
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Colors.black.withValues(alpha: 0.96),
+            Colors.black.withValues(alpha: 0.82),
+            Colors.transparent,
+          ],
+        ),
+      ),
+      child: Column(
+        children: [
+          SafeArea(
+            bottom: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
+              child: Row(
+                children: [
+                  IslandMark(
+                    size: 18,
+                    color: nerv.onSurface.withValues(alpha: 0.8),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Eyebrow(
+                      'SRI LANKA · ${nerv.monsoon.name.toUpperCase()}',
+                      color: nerv.onSurface.withValues(alpha: 0.55),
+                    ),
+                  ),
+                  const LiveClock(),
+                ],
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: [
+                Expanded(
+                  child: NationalLocalToggle(
+                    isNational: _isIslandWide,
+                    onChanged: _onToggleChanged,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                _buildSosButton(context),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          // Posture state line — reactive to current alert severity.
+          BlocBuilder<WeatherBloc, WeatherState>(
+            builder: (context, state) {
+              final posture = _postureFromWeather(state);
+              return AnimatedContainer(
+                duration: const Duration(milliseconds: 450),
+                height: 2,
+                color: posture.color,
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSosButton(BuildContext context) {
+    final critical = SeverityLevel.critical.color;
+
+    return GestureDetector(
+      onTap: () {
+        context.read<AlertBloc>().add(const RefreshAlerts());
+      },
+      child: Container(
+        height: 40,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          color: critical.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: critical.withValues(alpha: 0.6), width: 1),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.sos_outlined, size: 16, color: critical),
+            const SizedBox(width: 6),
+            Text(
+              'SOS',
+              style: TextStyle(
+                color: critical,
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 1.4,
+              ),
             ),
           ],
         ),
@@ -173,71 +237,46 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
   // ── Map ──────────────────────────────────────────────────────────────
 
   Widget _buildMapSection(BuildContext context) {
-    return Column(
-      children: [
-        // Rainbow gradient line
-        Container(
-          height: 2,
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                Color(0xFFFF1744),
-                Color(0xFFFF9100),
-                Color(0xFFFFEA00),
-                Color(0xFF00E676),
-                Color(0xFF00B0FF),
-                Color(0xFF651FFF),
-                Color(0xFFFF4081),
-              ],
-            ),
-          ),
+    return FlutterMap(
+      mapController: _mapController,
+      options: MapOptions(
+        initialCenter: _isIslandWide
+            ? SLMapConstants.center
+            : (_gpsLocation ?? SLMapConstants.center),
+        initialZoom: _isIslandWide ? SLMapConstants.initialZoom : 12.0,
+        minZoom: SLMapConstants.minZoom,
+        maxZoom: SLMapConstants.maxZoom,
+        cameraConstraint: CameraConstraint.containLatitude(),
+        interactionOptions: const InteractionOptions(
+          flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
         ),
-        Expanded(
-          child: FlutterMap(
-            mapController: _mapController,
-            options: MapOptions(
-              initialCenter: _isIslandWide
-                  ? SLMapConstants.center
-                  : (_gpsLocation ?? SLMapConstants.center),
-              initialZoom: _isIslandWide ? SLMapConstants.initialZoom : 12.0,
-              minZoom: SLMapConstants.minZoom,
-              maxZoom: SLMapConstants.maxZoom,
-              // Crop vertical whitespace (Arctic ↔ Antarctica).
-              cameraConstraint: CameraConstraint.containLatitude(),
-              interactionOptions: const InteractionOptions(
-                flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
+      ),
+      children: [
+        TileLayer(
+          urlTemplate: ApiConstants.mapTileHybrid,
+          userAgentPackageName: 'com.example.nerv_d_prevention',
+        ),
+        TileLayer(
+          urlTemplate: ApiConstants.owmPrecipitationOverlay,
+          userAgentPackageName: 'com.example.nerv_d_prevention',
+          tileDisplay: const TileDisplay.instantaneous(opacity: 0.6),
+        ),
+        if (!_isIslandWide && _gpsLocation != null)
+          MarkerLayer(
+            markers: [
+              Marker(
+                width: 40,
+                height: 40,
+                point: _gpsLocation!,
+                child: _buildLocationMarker(),
               ),
-            ),
-            children: [
-              TileLayer(
-                urlTemplate: ApiConstants.mapTileHybrid,
-                userAgentPackageName: 'com.example.nerv_d_prevention',
-              ),
-              TileLayer(
-                urlTemplate: ApiConstants.owmPrecipitationOverlay,
-                userAgentPackageName: 'com.example.nerv_d_prevention',
-                tileDisplay: const TileDisplay.instantaneous(opacity: 0.6),
-              ),
-              // Only show location marker in Local mode
-              if (!_isIslandWide && _gpsLocation != null)
-                MarkerLayer(
-                  markers: [
-                    Marker(
-                      width: 40,
-                      height: 40,
-                      point: _gpsLocation!,
-                      child: _buildLocationMarker(),
-                    ),
-                  ],
-                ),
             ],
           ),
-        ),
       ],
     );
   }
 
-  // ── Weather + Alert Section (Draggable bottom sheet) ────────────────
+  // ── Operations readout sheet ────────────────────────────────────────
 
   Widget _buildWeatherAlertSheet(
     BuildContext context,
@@ -250,9 +289,7 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
     return Container(
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
-        borderRadius: const BorderRadius.vertical(
-          top: Radius.circular(16),
-        ),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
         boxShadow: theme.brightness == Brightness.light
             ? [
                 BoxShadow(
@@ -269,6 +306,7 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
             return Center(
               child: CircularProgressIndicator(
                 color: theme.colorScheme.primary,
+                strokeWidth: 2,
               ),
             );
           }
@@ -277,12 +315,20 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
             return Center(
               child: Padding(
                 padding: const EdgeInsets.all(24),
-                child: Text(
-                  l10n.t('home.weatherUnavailable'),
-                  style: TextStyle(
-                    color: onSurface.withValues(alpha: 0.6),
-                    fontSize: 16,
-                  ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.signal_wifi_off,
+                      size: 28,
+                      color: onSurface.withValues(alpha: 0.4),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      l10n.t('home.weatherUnavailable'),
+                      style: context.nerv.body,
+                    ),
+                  ],
                 ),
               ),
             );
@@ -292,14 +338,10 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
             return _buildLoadedContent(context, scrollController, state);
           }
 
-          // WeatherInitial — show placeholder
           return Center(
             child: Text(
               l10n.t('home.loadingWeather'),
-              style: TextStyle(
-                color: onSurface.withValues(alpha: 0.5),
-                fontSize: 14,
-              ),
+              style: context.nerv.dataLabel,
             ),
           );
         },
@@ -315,18 +357,19 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
     final onSurface = theme.colorScheme.onSurface;
+    final nerv = context.nerv;
     final data = state.weatherData;
     final current = data.current;
     final alerts = WeatherAlertDeriver.deriveAlerts(
       data,
       districtName: state.location?.name,
     );
+    final posture = _postureFromWeather(state);
 
     return RefreshIndicator(
       color: theme.colorScheme.primary,
       backgroundColor: theme.colorScheme.surface,
       onRefresh: () async {
-        // Refresh both the local weather and the upstream SOS pipeline.
         context.read<WeatherBloc>().add(const RefreshWeather());
         context.read<AlertBloc>().add(const RefreshAlerts());
         await context.read<AlertBloc>().stream.firstWhere(
@@ -335,20 +378,76 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
       },
       child: ListView(
         controller: scrollController,
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+        padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
         children: [
-          // Drag handle (visual affordance for the sheet)
           Center(
             child: Container(
               width: 40,
               height: 4,
-              margin: const EdgeInsets.only(bottom: 8),
               decoration: BoxDecoration(
                 color: onSurface.withValues(alpha: 0.2),
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
           ),
+          const SizedBox(height: 14),
+          // ── Current posture ──
+          Row(
+            children: [
+              Expanded(
+                child: Eyebrow('CURRENT POSTURE'),
+              ),
+              Text(
+                state.location?.name ?? l10n.t('home.islandWide'),
+                style: nerv.dataLabel.copyWith(
+                  color: onSurface.withValues(alpha: 0.6),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Text(
+                WeatherCodeMapping.getIcon(
+                  current.weatherCode,
+                  isDay: current.isDay,
+                ),
+                style: const TextStyle(fontSize: 34),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${current.temperature.toStringAsFixed(1)}°C',
+                      style: nerv.numeral(size: 52),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      WeatherCodeMapping.getDescription(
+                        current.weatherCode,
+                        isDay: current.isDay,
+                      ),
+                      style: nerv.body.copyWith(
+                        color: onSurface.withValues(alpha: 0.65),
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          // ── Signature: the posture gauge ──
+          PostureGauge(level: posture),
+          const SizedBox(height: 16),
+          const Divider(height: 1),
+          const SizedBox(height: 16),
+
           // ── SOS / critical alerts from upstream ──
           BlocBuilder<AlertBloc, AlertState>(
             builder: (context, alertState) {
@@ -358,71 +457,79 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
                   children: [
                     if (alertState.isStaleCache)
                       Padding(
-                        padding: const EdgeInsets.only(bottom: 6),
+                        padding: const EdgeInsets.only(bottom: 8),
                         child: Text(
                           '${l10n.t('home.sosStalePrefix')}${_formatRelativeTime(alertState.lastFetched)}',
-                          style: TextStyle(
-                            color: onSurface.withValues(alpha: 0.5),
-                            fontSize: 11,
+                          style: nerv.dataLabel.copyWith(
+                            color: onSurface.withValues(alpha: 0.45),
+                            fontSize: 10,
                           ),
                         ),
                       ),
                     ...alertState.alerts.map(
-                      (a) => SosAlertBanner(
-                        alert: a,
-                        onTap: () {
-                          // Future: navigate to an alert-detail screen.
-                        },
-                      ),
+                      (a) => SosAlertBanner(alert: a),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 12),
                   ],
                 );
               }
               return const SizedBox.shrink();
             },
           ),
-          // Stale data banner
+
+          // ── Stale data banner ──
           if (state.isStaleCache)
             Padding(
-              padding: const EdgeInsets.only(bottom: 4),
+              padding: const EdgeInsets.only(bottom: 12),
               child: StaleDataBanner(lastUpdated: data.lastUpdated),
             ),
 
-          // Section header
-          Text(
-            _isIslandWide
-                ? l10n.t('home.islandWide')
-                : state.location?.name ?? l10n.t('home.local'),
-            style: TextStyle(
-              color: onSurface,
-              fontSize: 24,
-              fontWeight: FontWeight.w700,
-            ),
+          // ── Conditions band ──
+          Eyebrow('CONDITIONS'),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: _DataTile(
+                  label: 'FEELS LIKE',
+                  value: '${current.apparentTemperature.toStringAsFixed(1)}°C',
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _DataTile(
+                  label: 'HUMIDITY',
+                  value: '${current.humidity.toStringAsFixed(0)}%',
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _DataTile(
+                  label: 'WIND',
+                  value: '${current.windSpeed.toStringAsFixed(1)} km/h',
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 20),
 
-          // ── Current conditions chip ──
-          _buildCurrentConditionsChip(context, current, state.location?.name),
-          const SizedBox(height: 16),
-
-          // ── Derived alerts ──
+          // ── Derived alert feed ──
+          Row(
+            children: [
+              Expanded(child: Eyebrow('ALERT FEED')),
+              Text(
+                alerts.length.toString(),
+                style: nerv.numeralSmall(size: 12).copyWith(
+                  color: posture.color,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
           ...alerts.map(
             (alert) => Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: _buildAlertInfoCard(
-                context,
-                title: alert.title,
-                alertType: alert.alertType,
-                severity: alert.severity,
-                timestamp:
-                    'As of ${alert.timestamp.year}/'
-                    '${alert.timestamp.month.toString().padLeft(2, '0')}/'
-                    '${alert.timestamp.day.toString().padLeft(2, '0')}  '
-                    '${alert.timestamp.hour.toString().padLeft(2, '0')}:'
-                    '${alert.timestamp.minute.toString().padLeft(2, '0')}',
-                description: alert.description,
-              ),
+              padding: const EdgeInsets.only(bottom: 16),
+              child: _buildAlertLedgerRow(context, alert),
             ),
           ),
         ],
@@ -430,8 +537,18 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
     );
   }
 
-  /// Human-friendly relative time used for the "last updated" hint
-  /// under stale SOS alerts.
+  // ── Posture helpers ──────────────────────────────────────────────────
+
+  SeverityLevel _postureFromWeather(WeatherState? state) {
+    if (state is! WeatherLoaded) return SeverityLevel.calm;
+    final alerts = WeatherAlertDeriver.deriveAlerts(
+      state.weatherData,
+      districtName: state.location?.name,
+    );
+    return NervStyles.postureOf(alerts.map((a) => a.severity).toList());
+  }
+
+  /// Human-friendly relative time for stale SOS hints.
   static String _formatRelativeTime(DateTime? then) {
     if (then == null) return 'never';
     final delta = DateTime.now().difference(then);
@@ -441,259 +558,95 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
     return '${delta.inDays} d ago';
   }
 
-  // ── Current Conditions Chip ──────────────────────────────────────────
+  // ── Alert ledger row ─────────────────────────────────────────────────
 
-  Widget _buildCurrentConditionsChip(
-    BuildContext context,
-    dynamic current,
-    String? locationName,
-  ) {
-    final theme = Theme.of(context);
-    final onSurface = theme.colorScheme.onSurface;
-    final temp = current.temperature;
-    final feelsLike = current.apparentTemperature;
-    final humidity = current.humidity;
-    final windSpeed = current.windSpeed;
-    final weatherDesc = WeatherCodeMapping.getDescription(
-      current.weatherCode,
-      isDay: current.isDay,
-    );
-    final weatherEmoji = WeatherCodeMapping.getIcon(
-      current.weatherCode,
-      isDay: current.isDay,
-    );
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: theme.cardTheme.color ?? theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: theme.dividerTheme.color ?? onSurface.withValues(alpha: 0.1),
-          width: 0.5,
-        ),
-      ),
-      child: Row(
-        children: [
-          // Temp + emoji
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(weatherEmoji, style: const TextStyle(fontSize: 32)),
-                  const SizedBox(width: 8),
-                  Text(
-                    '${temp.toStringAsFixed(1)}°C',
-                    style: TextStyle(
-                      color: onSurface,
-                      fontSize: 36,
-                      fontWeight: FontWeight.w300,
-                      letterSpacing: -1,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 2),
-              Text(
-                weatherDesc,
-                style: TextStyle(
-                  color: onSurface.withValues(alpha: 0.65),
-                  fontSize: 14,
-                ),
-              ),
-            ],
-          ),
-          const Spacer(),
-          // Details column
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              _conditionDetail(
-                context,
-                'Feels like',
-                '${feelsLike.toStringAsFixed(1)}°C',
-              ),
-              const SizedBox(height: 4),
-              _conditionDetail(
-                context,
-                'Humidity',
-                '${humidity.toStringAsFixed(0)}%',
-              ),
-              const SizedBox(height: 4),
-              _conditionDetail(
-                context,
-                'Wind',
-                '${windSpeed.toStringAsFixed(1)} km/h',
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _conditionDetail(BuildContext context, String label, String value) {
-    final theme = Theme.of(context);
-    final onSurface = theme.colorScheme.onSurface;
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          '$label ',
-          style: TextStyle(
-            color: onSurface.withValues(alpha: 0.5),
-            fontSize: 12,
-          ),
-        ),
-        Text(
-          value,
-          style: TextStyle(
-            color: onSurface,
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ],
-    );
-  }
-
-  // ── Alert Card ───────────────────────────────────────────────────────
-
-  Widget _buildAlertInfoCard(
-    BuildContext context, {
-    required String title,
-    required SLAlertType alertType,
-    required SeverityLevel severity,
-    required String timestamp,
-    required String description,
-  }) {
-    final theme = Theme.of(context);
-    final onSurface = theme.colorScheme.onSurface;
-    final color = severity == SeverityLevel.calm
-        ? severity.color
-        : Color(int.parse(alertType.hexColor.replaceFirst('#', '0xFF')));
+  Widget _buildAlertLedgerRow(BuildContext context, AlertItem alert) {
+    final nerv = context.nerv;
+    final onSurface = nerv.onSurface;
+    final color = alert.severity == SeverityLevel.calm
+        ? alert.severity.color
+        : Color(int.parse(alert.alertType.hexColor.replaceFirst('#', '0xFF')));
 
     return InkWell(
       onTap: () {},
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Alert icon circle with severity color
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: color.withValues(alpha: 0.15),
-              border: Border.all(
-                color: color.withValues(alpha: 0.5),
-                width: 1.5,
+      child: Container(
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: nerv.border, width: 1),
+        ),
+        child: IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(width: 3, color: color),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              alert.title,
+                              style: TextStyle(
+                                color: onSurface,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            alert.severity.label,
+                            style: TextStyle(
+                              color: color,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 1.2,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'As of ${alert.timestamp.year}/'
+                        '${alert.timestamp.month.toString().padLeft(2, '0')}/'
+                        '${alert.timestamp.day.toString().padLeft(2, '0')} · '
+                        '${NervStyles.formatClockShort(alert.timestamp)}',
+                        style: nerv.dataLabel.copyWith(fontSize: 10),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        alert.description,
+                        style: nerv.body.copyWith(fontSize: 12.5),
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
               ),
-            ),
-            child: Icon(
-              _getAlertIcon(alertType),
-              color: color.withValues(alpha: 0.9),
-              size: 22,
-            ),
-          ),
-          const SizedBox(width: 14),
-          // Info text
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        title,
-                        style: TextStyle(
-                          color: onSurface,
-                          fontSize: 18,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: color.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        severity.label,
-                        style: TextStyle(
-                          color: color,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 0.5,
-                        ),
-                      ),
-                    ),
-                  ],
+              Padding(
+                padding: const EdgeInsets.only(right: 6),
+                child: Icon(
+                  Icons.chevron_right,
+                  color: onSurface.withValues(alpha: 0.3),
+                  size: 20,
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  timestamp,
-                  style: TextStyle(
-                    color: onSurface.withValues(alpha: 0.5),
-                    fontSize: 13,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  description,
-                  style: TextStyle(
-                    color: onSurface.withValues(alpha: 0.85),
-                    fontSize: 15,
-                    height: 1.5,
-                  ),
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
-          const SizedBox(width: 8),
-          Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: Icon(
-              Icons.chevron_right,
-              color: onSurface.withValues(alpha: 0.35),
-              size: 24,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
 
-  IconData _getAlertIcon(SLAlertType type) {
-    switch (type) {
-      case SLAlertType.flood:
-        return Icons.water;
-      case SLAlertType.landslide:
-        return Icons.terrain;
-      case SLAlertType.cyclone:
-        return Icons.cyclone;
-      case SLAlertType.lightning:
-        return Icons.bolt;
-      case SLAlertType.coastalWarning:
-        return Icons.beach_access;
-      case SLAlertType.tsunami:
-        return Icons.waves;
-      case SLAlertType.earthquake:
-        return Icons.public;
-    }
-  }
-
-  // ── Location Marker ─────────────────────────────────────────────────
+  // ── Location marker ─────────────────────────────────────────────────
 
   Widget _buildLocationMarker() {
     final theme = Theme.of(context);
@@ -701,7 +654,6 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
     return Stack(
       alignment: Alignment.center,
       children: [
-        // Outer accuracy circle (pulsing ring visual)
         Container(
           width: 40,
           height: 40,
@@ -714,17 +666,13 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
             ),
           ),
         ),
-        // Inner filled dot
         Container(
           width: 14,
           height: 14,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             color: primary,
-            border: Border.all(
-              color: theme.colorScheme.onPrimary,
-              width: 2,
-            ),
+            border: Border.all(color: theme.colorScheme.onPrimary, width: 2),
             boxShadow: [
               BoxShadow(
                 color: primary.withValues(alpha: 0.5),
@@ -735,6 +683,38 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// A single labelled data readout (console tile).
+class _DataTile extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _DataTile({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    final nerv = context.nerv;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      decoration: BoxDecoration(
+        color: nerv.surface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: nerv.border, width: 1),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Eyebrow(label, color: nerv.onSurface.withValues(alpha: 0.45)),
+          const SizedBox(height: 6),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(value, style: nerv.numeralSmall(size: 14)),
+          ),
+        ],
+      ),
     );
   }
 }

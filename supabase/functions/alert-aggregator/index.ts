@@ -12,7 +12,8 @@
 //
 // Deploy:
 //   supabase functions deploy alert-aggregator \
-//     --project-ref ebccdpydoptajlkmqefx --no-verify-jwt
+//     --project-ref muoaodsgpgbtbdhrmnfj
+//   (verify_jwt=false is set in supabase/config.toml)
 // ═══════════════════════════════════════════════════════════════════
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";

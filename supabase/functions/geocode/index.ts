@@ -8,7 +8,7 @@
 // MapTiler key lives in Supabase Secrets, never sent to client.
 // ============================================================================
 
-// @ts-expect-error — Deno runtime
+// Deno runtime globals (Deno, FetchEvent, Response, …)
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 const MAPTILER_KEY = Deno.env.get("MAPTILER_API_KEY");
@@ -105,6 +105,8 @@ function corsHeaders(): Record<string, string> {
     return {
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Methods": "POST, OPTIONS",
-        "Access-Control-Allow-Headers": "authorization, content-type, apikey",
+        // Wildcard so supabase-js headers (x-client-info, ...) pass
+        // preflight when the app runs on web.
+        "Access-Control-Allow-Headers": "*",
     };
 }

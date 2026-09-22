@@ -1,8 +1,10 @@
 # NERV Disaster Prevention — Supabase Backend
 
 This directory contains the Supabase backend for the NERV disaster
-prevention app. Auth still uses **Clerk**; Supabase is used purely for
-**data** (DMC alerts, timeline events, crisis pins, user subscriptions).
+prevention app. Auth uses **Supabase Auth** (email/password — see
+`lib/data/repositories/auth_repository_impl.dart`). The `clerk_user_id`
+column names in the user-scoped tables are a leftover from the pre-Supabase
+auth provider; they now store the Supabase Auth user id.
 
 ---
 
@@ -10,8 +12,8 @@ prevention app. Auth still uses **Clerk**; Supabase is used purely for
 
 | Item            | Value                                         |
 |-----------------|-----------------------------------------------|
-| Project ref     | `ebccdpydoptajlkmqefx`                        |
-| Project URL     | `https://ebccdpydoptajlkmqefx.supabase.co`    |
+| Project ref     | `muoaodsgpgbtbdhrmnfj`                        |
+| Project URL     | `https://muoaodsgpgbtbdhrmnfj.supabase.co`    |
 | Region          | `ap-south-1` (Mumbai)                         |
 | Postgres        | 17.6 (GA)                                     |
 | PostgREST       | enabled (default)                             |
@@ -24,18 +26,33 @@ prevention app. Auth still uses **Clerk**; Supabase is used purely for
 ```
 supabase/
 ├── functions/
-│   └── alert-aggregator/
-│       ├── index.ts       # Edge function (Open-Meteo + GDACS → alerts)
-│       └── deno.json      # Deno import map
+│   ├── weather/            # WeatherAPI.com proxy (current + 5-day forecast)
+│   ├── geocode/            # MapTiler forward + reverse geocoding proxy
+│   ├── tiles/              # MapTiler basemap + OWM overlay tile proxy
+│   ├── contact/            # Contact-Us form → contact_messages
+│   ├── crisis-pins/        # Community pins: GET list / POST create
+│   ├── alert-aggregator/   # Open-Meteo + GDACS RSS → alerts + timeline_events
+│   │   └── deno.json       # Deno import map
+│   └── globals.d.ts        # Deno ambient type declarations
 ├── migrations/
+│   ├── 20260624_initial_schema.sql
 │   ├── 20260624_01_reference_data_and_constraints.sql
 │   ├── 20260624_02_user_scoped_and_realtime.sql
 │   ├── 20260624_03_rpcs_and_views.sql
-│   └── 20260624_04_toggle_pin_watch_cleanup.sql
+│   ├── 20260625_landslide_zones_table.sql
+│   ├── 20260922_fix_crisis_pin_type_constraint.sql
+│   ├── 20260922_tighten_user_scoped_rls.sql
+│   └── 20260922_lock_service_only_writes.sql
 └── README.md              # ← you are here
 ```
 
-All three migrations are **already applied** to the live project.
+All eight migrations are **applied** to the live project above
+(`select name from supabase_migrations.schema_migrations order by version;`).
+
+Note: `20260625_landslide_zones_table.sql` creates a GiST index using
+`ll_to_earth()`, which needs the `earthdistance` + `cube` extensions in the
+`extensions` schema. They are not created by any migration — enable them
+before applying that file to a fresh project.
 
 ---
 
@@ -57,8 +74,9 @@ All three migrations are **already applied** to the live project.
 | `crisis_pins`         |    ✓     |     ✓       |      ✓       | Community contribution (any anon insert) |
 | `sos_alerts`          |    ✓     |     ✓       |      ✓       | Public SOS submission                    |
 | `contact_messages`    |    ✗     |     ✗       |      ✗       | Service-role writes only                 |
+| `landslide_zones`     |    ✗     |     ✓       |      ✗       | 8 seeded polygons, read by the hazard map |
 
-### User-scoped tables (Clerk user_id as text)
+### User-scoped tables (`clerk_user_id` holds the Supabase Auth uid)
 
 | Table                 | Realtime | Own-row RLS | Notes                                  |
 |-----------------------|:--------:|:-----------:|----------------------------------------|
@@ -97,10 +115,23 @@ All three migrations are **already applied** to the live project.
 | `districts`           |      ✓      |      ✗      |      ✗      |      ✗      |
 | `alert_types`         |      ✓      |      ✗      |      ✗      |      ✗      |
 
-"Own only" policies compare `clerk_user_id` against the request JWT
-sub claim (`request.jwt.claims ->> 'sub'`). For full Clerk ↔ Supabase
-JWT bridging in production, configure Clerk's native Supabase
-integration so it signs Supabase JWTs with the same key.
+`districts` / `alert_types` / `alerts` / `timeline_events` /
+`contact_messages` also have their INSERT/UPDATE/DELETE **grants revoked** from
+`anon` and `authenticated`, so those ✗ marks hold at the ACL layer as well as
+under RLS. Before `20260922_lock_service_only_writes.sql` the three
+`*_service_insert` policies carried no `to <role>` clause (so they applied to
+PUBLIC) and `POST /rest/v1/alerts` with only the anon key returned **201** —
+i.e. any client could publish a fake alert that every device received over
+realtime. Re-checked after the fix: anon alert insert → 401, anon district
+update → 401, anon district read → 200, aggregator (service role) → 200.
+
+"Own only" policies compare `clerk_user_id` (the column name is kept for
+history) against the request JWT `sub` claim — `auth.jwt() ->> 'sub'` — and
+are restricted `to authenticated`, so an anon request matches nothing.
+`20260922_tighten_user_scoped_rls.sql` replaced the earlier
+`coalesce(claims ->> 'sub', clerk_user_id)` form, which degenerated to
+`clerk_user_id = clerk_user_id` whenever the caller had no `sub` claim and
+therefore exposed every row to the anon key.
 
 ---
 
@@ -113,31 +144,76 @@ integration so it signs Supabase JWTs with the same key.
 | `alerts`          | `latitude ∈ [-90, 90]`, `longitude ∈ [-180, 180]` |
 | `timeline_events` | `event_type IN ('flood','landslide','cyclone','lightning','coastalWarning','tsunami','earthquake','info','weather')` |
 | `timeline_events` | lat/lng ranges                            |
-| `crisis_pins`     | `type IN ('shelter','water','toilet','road','waste','reliefSupply')` |
+| `crisis_pins`     | `type IN ('shelter','water','toilet','road','waste','relief_supply')` |
 | `crisis_pins`     | `capacity >= 0`, `watch_count >= 0`       |
 | `sos_alerts`      | `status IN ('active','acknowledged','resolved','cancelled')` |
 
 ---
 
-## Edge function: `alert-aggregator`
+## Edge function inventory
+
+All six are deployed and ACTIVE on `muoaodsgpgbtbdhrmnfj`.
+
+| Function            | verify_jwt | Called by (Flutter)                                        | Secrets required        |
+|---------------------|:----------:|------------------------------------------------------------|-------------------------|
+| `weather`           |    ✓       | `WeatherApiClient` → `functions.invoke('weather')`          | `WEATHERAPI_KEY`        |
+| `geocode`           |    ✓       | `MaptilerGeocodingClient` (search + reverse geocode)        | `MAPTILER_API_KEY`      |
+| `tiles`             |    ✗       | `flutter_map` `TileLayer` (basemap + OWM overlays)          | `MAPTILER_API_KEY`, `OWM_API_KEY` |
+| `contact`           |    ✓       | `ContactApiClient` → `contact_messages`                     | – (service role is auto-injected) |
+| `crisis-pins`       |    ✓       | pins list/create (repository not wired yet)                 | –                       |
+| `alert-aggregator`  |    ✗       | cron / manual invoke, never the client                      | –                       |
+
+`verify_jwt = false` on `tiles` is deliberate: `TileLayer` issues plain image
+GETs and cannot attach an `Authorization` header. The other five are reached
+through `supabase.functions.invoke`, which always sends the session (or anon)
+JWT, so requiring one costs nothing.
+
+### Secrets
+
+Provider keys live **only** in Supabase Secrets — never in `.env`, never in
+the APK. Until they are set, `weather` / `geocode` / `tiles` answer
+`500 "Server misconfigured"` and the map renders blank overlays.
+
+```powershell
+npx supabase secrets set `
+  WEATHERAPI_KEY=... MAPTILER_API_KEY=... OWM_API_KEY=... `
+  --project-ref muoaodsgpgbtbdhrmnfj
+```
+
+`SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are injected by the platform —
+do not set them.
+
+### Deploy
+
+Either from the repo script (reads the project ref from `.env`, deploys all
+six, honours `verify_jwt` from `config.toml`):
+
+```powershell
+$env:SUPABASE_ACCESS_TOKEN = "sbp_..."   # dashboard → Account → Tokens
+pwsh scripts/deploy_edge_functions.ps1
+```
+
+Or per function with the CLI:
+
+```bash
+supabase functions deploy alert-aggregator --project-ref muoaodsgpgbtbdhrmnfj
+```
+
+Or paste the file contents into the Supabase Dashboard → Edge Functions →
+"Deploy from editor".
+
+## Edge function detail: `alert-aggregator`
 
 Polls Open-Meteo and GDACS RSS, derives alerts via thresholds, and
 upserts into `alerts` + mirrors into `timeline_events`.
 
-### Deploy
+### Redeploy caveat (`alert-aggregator` only)
 
-The MCP deploy tool currently has a transport-layer type bug
-(`false` and arrays get stringified). Use the Supabase CLI instead:
-
-```bash
-# from project root
-supabase functions deploy alert-aggregator \
-  --project-ref ebccdpydoptajlkmqefx \
-  --no-verify-jwt
-```
-
-Or paste the file contents into the Supabase Dashboard → Edge
-Functions → "Deploy from editor".
+This function ships a `deno.json` import map. Once a function is deployed
+**with** an import map through the Supabase MCP tool, the stored
+`import_map_path` is an absolute `file:///tmp/...` URI and every later MCP
+deploy of that function fails with `import map path does not exist`. Use the
+CLI or the Dashboard for subsequent `alert-aggregator` deploys.
 
 ### Thresholds
 
@@ -155,16 +231,20 @@ Functions → "Deploy from editor".
 
 ### Schedule
 
-Recommended: every 10 minutes via Supabase Cron.
+**Not scheduled yet** on `muoaodsgpgbtbdhrmnfj` — `pg_cron` and `pg_net` are
+not enabled there, so `alerts` only changes when someone invokes the function
+manually. Either add the schedule from Dashboard → Edge Functions →
+`alert-aggregator` → *Schedule* (the dashboard enables the extensions for
+you), or run the SQL below after enabling `pg_cron` + `pg_net` and storing the
+service-role key in `vault`:
 
 ```sql
--- In the SQL editor, then schedule with pg_cron or supabase_cron
 select cron.schedule(
   'alert-aggregator-10m',
   '*/10 * * * *',
   $$
   select net.http_post(
-    url     := 'https://ebccdpydoptajlkmqefx.supabase.co/functions/v1/alert-aggregator',
+    url     := 'https://muoaodsgpgbtbdhrmnfj.supabase.co/functions/v1/alert-aggregator',
     headers := jsonb_build_object(
       'Authorization', 'Bearer ' || current_setting('app.settings.service_role_key'),
       'Content-Type',  'application/json'
@@ -175,29 +255,34 @@ select cron.schedule(
 );
 ```
 
-Or call it manually from the dashboard's Edge Functions → "Invoke".
+A second schedule running `select public.expire_stale_alerts();` every 10
+minutes keeps expired alerts out of the app. That RPC is `SECURITY DEFINER`
+and EXECUTE is now restricted to `service_role`
+(`20260922_lock_service_only_writes.sql`), so it must be called from the cron
+job's service-role context or the dashboard, never from the client.
+
+Or call the aggregator manually:
+
+```powershell
+curl.exe https://muoaodsgpgbtbdhrmnfj.supabase.co/functions/v1/alert-aggregator
+```
 
 ---
 
-## Flutter client wiring (next step, not part of this backend PR)
+## Flutter client wiring (done)
 
-Add the Supabase URL + anon key to `.env`:
+`.env` needs only two values — provider keys are never client-side:
 
 ```env
-SUPABASE_URL=https://ebccdpydoptajlkmqefx.supabase.co
+SUPABASE_URL=https://muoaodsgpgbtbdhrmnfj.supabase.co
 SUPABASE_ANON_KEY=eyJhbGciOi...   # from Supabase dashboard → Settings → API
 ```
 
-Then in `main.dart`:
-
-```dart
-await Supabase.initialize(
-  url: dotenv.env['SUPABASE_URL']!,
-  anonKey: dotenv.env['SUPABASE_ANON_KEY']!,
-);
-```
-
-`supabase_flutter ^2.8.0` is already in `pubspec.yaml` — no new deps.
+`SupabaseService.init()` (`lib/data/remote/supabase/supabase_service.dart`)
+reads both through `flutter_dotenv`; `main.dart` loads `.env` and then awaits
+`initDependencies()`, which initialises Supabase as its very first step.
+Tile URLs are built in `AppConstants` as
+`{SUPABASE_URL}/functions/v1/tiles/...`, so no key ever reaches the device.
 
 ---
 
@@ -221,7 +306,16 @@ select tablename from pg_publication_tables
 
 | Migration                                      | What it added                                       |
 |------------------------------------------------|-----------------------------------------------------|
+| `20260624_initial_schema`                      | `alerts`, `timeline_events`, `crisis_pins`, `sos_alerts`, `contact_messages`, base RLS + realtime |
 | `20260624_01_reference_data_and_constraints`   | CHECK constraints, `districts`, `alert_types`, timeline detail fields |
 | `20260624_02_user_scoped_and_realtime`         | `pin_watches`, `alert_subscriptions`, realtime for `timeline_events`, `updated_at` triggers |
 | `20260624_03_rpcs_and_views`                   | 5 RPCs + `v_active_alerts` view + `expire_stale_alerts` |
-| `20260624_04_toggle_pin_watch_cleanup`         | Drop + recreate `toggle_pin_watch` (removed tautology)  |
+| `20260625_landslide_zones_table`               | `landslide_zones` + 8 seeded NBRO-inspired polygons |
+| `20260922_fix_crisis_pin_type_constraint`      | Reconciles the two competing `crisis_pins.type` CHECKs on `relief_supply` |
+| `20260922_tighten_user_scoped_rls`             | `pin_watches` / `alert_subscriptions` policies keyed on `auth.jwt()`, `authenticated` only, + missing insert/delete |
+| `20260922_lock_service_only_writes`            | Alert/timeline/contact writes restricted to `service_role`, reference data read-only, `expire_stale_alerts` EXECUTE locked, `search_path` pinned on 7 functions |
+
+`20260624_04_toggle_pin_watch_cleanup` is referenced by older revisions of
+this README but was never committed and never needed: the
+`WHERE w.pin_id = w.pin_id` line in `toggle_pin_watch` is a harmless tautology
+(the real predicate `w.pin_id = p_pin_id` follows it).
