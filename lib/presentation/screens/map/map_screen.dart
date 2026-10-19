@@ -15,6 +15,7 @@ import '../../../domain/entities/weather_data.dart';
 import '../../blocs/weather/weather_bloc.dart';
 import '../../widgets/nerv/nerv_styles.dart';
 import '../../widgets/nerv/deck_header.dart';
+import '../../widgets/location_search_widget.dart';
 import 'select_layer_sheet.dart';
 
 class MapScreen extends StatefulWidget {
@@ -40,6 +41,13 @@ class _MapScreenState extends State<MapScreen> {
   List<_HazardPoint> _landslidePoints = const [];
   List<_LandslidePolygonItem> _landslidePolygons = const [];
   bool _landslideLoading = false;
+
+  /// Cache for the interpolated 5-minute slots, keyed on the identity of the
+  /// hourly list they were derived from. Both the weather chip and the time
+  /// scrubber read the same snapshot per build, and pan-driven rebuilds keep
+  /// the identical list, so this avoids recomputing O(hourly × 12) each frame.
+  List<_FiveMinSlot>? _slotsCache;
+  List<HourlyWeather>? _slotsSource;
 
   @override
   void initState() {
@@ -75,33 +83,67 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
+  /// Surfaces the (previously dead-code) [LocationSearchWidget] so the
+  /// documented "search any city/region" capability is actually reachable.
+  /// A chosen location is loaded through the bloc and the camera flies to
+  /// it; the GPS option routes back through Local mode.
+  void _openLocationSearch() {
+    LocationSearchWidget.showSearchSheet(context, _weatherBloc, (location) {
+      if (location.isGps) {
+        _weatherBloc.add(const LoadWeather(useGps: true));
+      } else {
+        _weatherBloc.add(SelectLocation(location: location));
+        _mapController.move(
+          LatLng(location.latitude, location.longitude),
+          10.0,
+        );
+      }
+    });
+  }
+
   Future<void> _fetchLandslides() async {
     if (_landslideLoading) return;
     setState(() => _landslideLoading = true);
-    final repo = getIt<LandslideRepository>();
-    final zones = await repo.getActiveZones();
-    if (!mounted) return;
-    setState(() {
-      _landslideLoading = false;
-      _landslidePoints = zones
-          .where((z) => z.isPoint || !z.isPolygon)
-          .map((z) => _HazardPoint(
-                LatLng(z.latitude!, z.longitude!),
-                _severityFromString(z.severity),
-              ))
-          .toList();
-      _landslidePolygons = zones
-          .where((z) => z.isPolygon)
-          .map((z) => _LandslidePolygonItem(
-                z.polygonRings!
-                    .map((p) => LatLng(p[0], p[1]))
-                    .toList(),
+    try {
+      final repo = getIt<LandslideRepository>();
+      final zones = await repo.getActiveZones();
+      if (!mounted) return;
+      setState(() {
+        _landslideLoading = false;
+        // Points: require a real lat/lon pair (isPoint already checks both
+        // non-null and that the row isn't a polygon).
+        _landslidePoints = zones
+            .where((z) => z.isPoint)
+            .map((z) => _HazardPoint(
+                  LatLng(z.latitude!, z.longitude!),
+                  _severityFromString(z.severity),
+                ))
+            .toList();
+        // Polygons: need at least 3 vertices, each with >= 2 coordinates,
+        // so a malformed ring can never crash the map.
+        _landslidePolygons = zones
+            .where((z) => z.isPolygon)
+            .map((z) {
+              final rings = (z.polygonRings ?? const <List<double>>[])
+                  .where((p) => p.length >= 2)
+                  .toList();
+              if (rings.length < 3) return null;
+              return _LandslidePolygonItem(
+                rings.map((p) => LatLng(p[0], p[1])).toList(),
                 _severityFromString(z.severity),
                 z.name,
                 z.source,
-              ))
-          .toList();
-    });
+              );
+            })
+            .whereType<_LandslidePolygonItem>()
+            .toList();
+      });
+    } catch (_) {
+      // Auth / RLS / network failure must not leave the landslide tab
+      // permanently stuck in a loading state — reset so it can retry.
+      if (!mounted) return;
+      setState(() => _landslideLoading = false);
+    }
   }
 
   String get _hazardTitle {
@@ -152,6 +194,16 @@ class _MapScreenState extends State<MapScreen> {
         );
       },
     );
+  }
+
+  List<_FiveMinSlot> _slotsFor(List<HourlyWeather> hourly) {
+    if (_slotsCache != null && identical(hourly, _slotsSource)) {
+      return _slotsCache!;
+    }
+    final slots = _buildFiveMinSlots(hourly);
+    _slotsSource = hourly;
+    _slotsCache = slots;
+    return slots;
   }
 
   /// Expands the hourly forecast into 5-minute slots via linear interpolation
@@ -302,22 +354,38 @@ class _MapScreenState extends State<MapScreen> {
                     initialZoom: _currentZoom,
                     minZoom: SLMapConstants.minZoom,
                     maxZoom: SLMapConstants.maxZoom,
-                    // Crop vertical whitespace so the map's top edge never
-                    // exceeds the Arctic (90°N) and the bottom edge never
-                    // exceeds Antarctica (-90°S). These are the defaults
-                    // of `containLatitude`, and they're the exact reason
-                    // this helper exists ("prevent the background color
-                    // from appearing at the 'top' and 'bottom' of the
-                    // typical map"). Horizontal panning stays free.
-                    cameraConstraint:
-                        CameraConstraint.containLatitude(),
+                    // Constrain the camera to Sri Lanka's operational
+                    // viewport (island + maritime margin). The old
+                    // containLatitude() used the ±90° default and
+                    // constrained nothing — a user could pan to 80°N/20°W,
+                    // leaving the island (and all district context) behind
+                    // while flutter_map cached global tiles. Longitude is
+                    // now bounded too, which also caps tile-layer memory.
+                    cameraConstraint: CameraConstraint.contain(
+                      bounds: LatLngBounds(
+                        SLMapConstants.viewSouthWest,
+                        SLMapConstants.viewNorthEast,
+                      ),
+                    ),
                     onPositionChanged: (position, hasGesture) {
-                      if (hasGesture) {
-                        setState(() {
-                          _currentCenter = position.center;
-                          _currentZoom = position.zoom;
-                        });
+                      if (!hasGesture) return;
+                      final center = position.center;
+                      final zoom = position.zoom;
+                      // Only rebuild on material movement — this fires ~60×/s
+                      // during a pan and a full Scaffold rebuild each time is
+                      // visible jank on mid-range devices.
+                      final movedLat =
+                          (center.latitude - _currentCenter.latitude).abs();
+                      final movedLon =
+                          (center.longitude - _currentCenter.longitude).abs();
+                      final zoomChanged = (zoom - _currentZoom).abs() > 0.1;
+                      if (movedLat < 0.01 && movedLon < 0.01 && !zoomChanged) {
+                        return;
                       }
+                      setState(() {
+                        _currentCenter = center;
+                        _currentZoom = zoom;
+                      });
                     },
                   ),
                   children: [
@@ -383,6 +451,15 @@ class _MapScreenState extends State<MapScreen> {
                   right: 16,
                   top: MediaQuery.of(context).padding.top + 80,
                   child: _buildMapButton(Icons.my_location, _zoomToMyLocation),
+                ),
+
+              // Location search — reuses the shared WeatherBloc so results
+              // stream into the same state machine as the tabs.
+              if (_selectedLayer != MapLayer.hazardMap)
+                Positioned(
+                  right: 16,
+                  top: MediaQuery.of(context).padding.top + 136,
+                  child: _buildMapButton(Icons.search, _openLocationSearch),
                 ),
 
               // Bottom: Time Scrubber (or Hazard sub-tabs in hazard mode)
@@ -615,7 +692,7 @@ class _MapScreenState extends State<MapScreen> {
     return BlocBuilder<WeatherBloc, WeatherState>(
       builder: (context, state) {
         if (state is WeatherLoaded) {
-          final slots = _buildFiveMinSlots(state.weatherData.hourly);
+          final slots = _slotsFor(state.weatherData.hourly);
           final selectedIndex = _clampIndex(_selectedSlotIndex, slots.length);
           final selected = slots.isNotEmpty ? slots[selectedIndex] : null;
 
@@ -1046,7 +1123,7 @@ class _MapScreenState extends State<MapScreen> {
         final primary = theme.colorScheme.primary;
         final isDark = theme.brightness == Brightness.dark;
         final slots = state is WeatherLoaded
-            ? _buildFiveMinSlots(state.weatherData.hourly)
+            ? _slotsFor(state.weatherData.hourly)
             : const <_FiveMinSlot>[];
 
         final selectedIndex = _clampIndex(_selectedSlotIndex, slots.length);
@@ -1143,9 +1220,14 @@ class _MapScreenState extends State<MapScreen> {
                     value: selectedIndex.toDouble(),
                     min: 0,
                     max: (slots.length - 1).toDouble(),
-                    divisions: slots.length - 1,
+                    // No `divisions`: Flutter paints a tick mark per division
+                    // every frame, and ~144 divisions is expensive. Snap the
+                    // raw value to the nearest slot instead.
                     onChanged: (v) {
-                      setState(() => _selectedSlotIndex = v.round());
+                      final idx = v.round().clamp(0, slots.length - 1);
+                      if (idx != _selectedSlotIndex) {
+                        setState(() => _selectedSlotIndex = idx);
+                      }
                     },
                   ),
                 )

@@ -59,7 +59,19 @@ class AlertBloc extends Bloc<AlertEvent, AlertState> {
         ),
       );
     } catch (e) {
-      emit(AlertError(e.toString()));
+      // Transient network/parse failure during a refresh must NOT blank the
+      // visible alert feed. Keep the previous list and mark it stale; only
+      // surface an error when there is nothing cached to show.
+      final prev = state;
+      if (prev is AlertLoaded) {
+        emit(AlertLoaded(
+          alerts: prev.alerts,
+          lastFetched: prev.lastFetched,
+          isStaleCache: true,
+        ));
+      } else {
+        emit(AlertError(e.toString()));
+      }
     }
   }
 

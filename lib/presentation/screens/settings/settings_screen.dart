@@ -141,60 +141,83 @@ class SettingsScreen extends StatelessWidget {
             ),
             child: Column(
               children: [
+                // Contract: Critical/Emergency deliveries are NEVER muted
+                // by these switches (enforced in LocalNotificationService).
+                // The rows gate Advisory/Warning-tier noise only.
                 _buildNotificationToggle(
                   context,
                   title: l10n.t('settings.criticalAlerts'),
-                  subtitle: 'Emergency Warnings',
-                  value: true,
-                  onChanged: (_) {},
+                  subtitle: 'Emergency Warnings always delivered',
+                  value: state.isHazardEnabled('critical'),
+                  onChanged: (v) => context.read<SettingsBloc>().add(
+                        ToggleHazardNotifications(key: 'critical', enabled: v),
+                      ),
                 ),
                 _divider(context),
                 _buildNotificationToggle(
                   context,
                   title: l10n.t('settings.floodAlerts'),
                   subtitle: 'River & Urban Flooding',
-                  value: true,
-                  onChanged: (_) {},
+                  value: state.isHazardEnabled('flood'),
+                  onChanged: (v) => context.read<SettingsBloc>().add(
+                        ToggleHazardNotifications(key: 'flood', enabled: v),
+                      ),
                 ),
                 _divider(context),
                 _buildNotificationToggle(
                   context,
                   title: l10n.t('settings.landslideAlerts'),
                   subtitle: 'Slope Failure Warnings',
-                  value: true,
-                  onChanged: (_) {},
+                  value: state.isHazardEnabled('landslide'),
+                  onChanged: (v) => context.read<SettingsBloc>().add(
+                        ToggleHazardNotifications(
+                          key: 'landslide',
+                          enabled: v,
+                        ),
+                      ),
                 ),
                 _divider(context),
                 _buildNotificationToggle(
                   context,
                   title: l10n.t('settings.cycloneAdvisories'),
                   subtitle: 'Tropical Storm Warnings',
-                  value: true,
-                  onChanged: (_) {},
+                  value: state.isHazardEnabled('cyclone'),
+                  onChanged: (v) => context.read<SettingsBloc>().add(
+                        ToggleHazardNotifications(key: 'cyclone', enabled: v),
+                      ),
                 ),
                 _divider(context),
                 _buildNotificationToggle(
                   context,
                   title: l10n.t('settings.lightningAlerts'),
                   subtitle: 'High Lightning Activity',
-                  value: true,
-                  onChanged: (_) {},
+                  value: state.isHazardEnabled('lightning'),
+                  onChanged: (v) => context.read<SettingsBloc>().add(
+                        ToggleHazardNotifications(key: 'lightning', enabled: v),
+                      ),
                 ),
                 _divider(context),
                 _buildNotificationToggle(
                   context,
                   title: l10n.t('settings.coastalWarnings'),
                   subtitle: 'High Waves & Storm Surge',
-                  value: true,
-                  onChanged: (_) {},
+                  value: state.isHazardEnabled('coastalWarning'),
+                  onChanged: (v) => context.read<SettingsBloc>().add(
+                        ToggleHazardNotifications(
+                          key: 'coastalWarning',
+                          enabled: v,
+                        ),
+                      ),
                 ),
                 _divider(context),
                 _buildNotificationToggle(
                   context,
                   title: l10n.t('settings.tsunamiBulletins'),
                   subtitle: 'Ocean Seismic Warnings',
-                  value: true,
-                  onChanged: (_) {},
+                  value: state.isHazardEnabled('tsunami'),
+                  onChanged: (v) => context.read<SettingsBloc>().add(
+                        ToggleHazardNotifications(key: 'tsunami', enabled: v),
+                      ),
                 ),
               ],
             ),
@@ -239,14 +262,33 @@ class SettingsScreen extends StatelessWidget {
                   context,
                   icon: Icons.privacy_tip_outlined,
                   title: l10n.t('settings.privacyPolicy'),
-                  onTap: () {},
+                  onTap: () => _showLegalDialog(
+                    context,
+                    title: 'Privacy Policy',
+                    body: 'NERV collects no analytics and runs without ads or '
+                        'trackers. Location is used only to fetch weather for '
+                        'your device and is never uploaded or stored remotely. '
+                        'Cached forecasts and preferences stay on your device '
+                        'in local storage and can be cleared any time from '
+                        'this screen or by uninstalling the app.',
+                  ),
                 ),
                 _divider(context),
                 _buildSettingsTile(
                   context,
                   icon: Icons.description_outlined,
                   title: l10n.t('settings.termsOfService'),
-                  onTap: () {},
+                  onTap: () => _showLegalDialog(
+                    context,
+                    title: 'Terms of Service',
+                    body: 'NERV is an informational disaster-prevention aid, '
+                        'not an official authority. Always follow the National '
+                        'Disaster Management Centre (DMC) and official '
+                        'instructions. Forecast and alert data is provided by '
+                        'third-party providers "as is"; the app may be delayed '
+                        'or inaccurate. Do not rely on NERV alone for '
+                        'life-safety decisions.',
+                  ),
                 ),
               ],
             ),
@@ -290,7 +332,7 @@ class SettingsScreen extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            l10n.t('settings.weatherOpenMeteo'),
+            l10n.t('settings.weatherProvider'),
             style: nerv.dataLabel.copyWith(
               color: nerv.onSurface.withValues(alpha: 0.35),
               fontSize: 9,
@@ -449,7 +491,7 @@ class SettingsScreen extends StatelessWidget {
       title: 'FONT WEIGHT',
       options: FontWeightScale.values,
       currentValue: state.fontWeightScale,
-      labelBuilder: (scale) => _getFontWeightLabel(scale),
+      labelBuilder: _getFontWeightLabel,
       onSelected: (scale) {
         context.read<SettingsBloc>().add(SetFontWeightScale(scale: scale));
       },
@@ -580,6 +622,46 @@ class SettingsScreen extends StatelessWidget {
               const SizedBox(height: 16),
             ],
           ),
+        );
+      },
+    );
+  }
+
+  void _showLegalDialog(
+    BuildContext context, {
+    required String title,
+    required String body,
+  }) {
+    final theme = Theme.of(context);
+    final nerv = context.nerv;
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: theme.colorScheme.surface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+            side: const BorderSide(color: Color(0xFF2A2A2A), width: 1),
+          ),
+          titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+          title: Eyebrow(title.toUpperCase()),
+          contentPadding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+          content: SingleChildScrollView(
+            child: Text(
+              body,
+              style: nerv.body.copyWith(fontSize: 12.5),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(
+                'Close',
+                style: TextStyle(color: theme.colorScheme.primary),
+              ),
+            ),
+          ],
         );
       },
     );

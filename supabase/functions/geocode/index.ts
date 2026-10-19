@@ -40,9 +40,21 @@ Deno.serve(async (req) => {
 
     if (typeof body.q === "string" && body.q.trim().length > 0) {
         // Forward geocode.
-        url.pathname += `/${encodeURIComponent(body.q.trim())}.json`;
+        const q = body.q.trim();
+        // Bound the query length — an anon-key holder must not be able to
+        // ship a megabyte of text to MapTiler through our proxied key.
+        if (q.length > 120) {
+            return json({ error: "Query too long (max 120 chars)" }, 400);
+        }
+        // Clamp limit to a sane 1–10 range; a raw Number() of an object is
+        // NaN (→ 5) and 1e9 would request maximum results and burn quota.
+        const rawLimit = Number(body.limit);
+        const limit = Number.isFinite(rawLimit)
+            ? Math.min(10, Math.max(1, Math.trunc(rawLimit)))
+            : 5;
+        url.pathname += `/${encodeURIComponent(q)}.json`;
         url.searchParams.set("key", MAPTILER_KEY);
-        url.searchParams.set("limit", String(body.limit ?? 5));
+        url.searchParams.set("limit", String(limit));
     } else if (
         Number.isFinite(body.latitude) &&
         Number.isFinite(body.longitude)
@@ -50,6 +62,9 @@ Deno.serve(async (req) => {
         // Reverse geocode.
         const lat = Number(body.latitude);
         const lon = Number(body.longitude);
+        if (Math.abs(lat) > 90 || Math.abs(lon) > 180) {
+            return json({ error: "Coordinates out of range" }, 400);
+        }
         url.pathname += `/${lon},${lat}.json`;
         url.searchParams.set("key", MAPTILER_KEY);
         url.searchParams.set("limit", "1");

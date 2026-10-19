@@ -11,14 +11,23 @@ class WeatherAlertDeriver {
 
   // ── Thresholds ──────────────────────────────────────────────────────
 
-  /// Precipitation rate (mm/h) triggering an emergency flood warning.
+  /// Hourly precipitation RATE (mm/h) triggering an emergency flood warning.
   static const double _floodEmergencyPrecip = 15.0;
 
-  /// Precipitation rate (mm/h) triggering a flood watch.
+  /// Hourly precipitation RATE (mm/h) triggering a flood watch.
   static const double _floodWarningPrecip = 5.0;
 
-  /// Precipitation rate (mm/h) triggering a rain advisory.
+  /// Hourly precipitation RATE (mm/h) triggering a rain advisory.
   static const double _rainAdvisoryPrecip = 1.0;
+
+  /// 24h precipitation ACCUMULATION (mm) bands for river / urban flooding.
+  /// Kept separate from the rate rules above — monsoon rain routinely
+  /// exceeds 15 mm/day without being hazardous, so daily totals must use
+  /// daily-scaled thresholds.
+  static const double _floodDailyAdvisoryMm = 25;
+  static const double _floodDailyWarningMm = 50;
+  static const double _floodDailyEmergencyMm = 100;
+  static const double _floodDailyCriticalMm = 150;
 
   /// Wind speed (km/h) triggering a cyclone advisory.
   static const double _cycloneEmergencyWind = 50.0;
@@ -44,18 +53,21 @@ class WeatherAlertDeriver {
     final current = data.current;
     final daily = data.daily.isNotEmpty ? data.daily.first : null;
 
-    final precip = daily?.precipitationSum ?? current.precipitation;
+    // Peak hourly rainfall RATE over the current hour + next 6 hours.
+    final precipRate = _peakHourlyPrecipRate(data);
+    // Today's rainfall ACCUMULATION (mm) — different unit, different rules.
+    final precipSum = daily?.precipitationSum ?? current.precipitation;
     final precipProb = daily?.precipitationProbabilityMax ?? 0;
     final windSpeed = daily?.windSpeedMax ?? current.windSpeed;
     final uvIndex = daily?.uvIndexMax ?? current.uvIndex;
     final cloudCover = current.cloudCover;
     final weatherCode = current.weatherCode;
-    final now = DateTime.now();
+    final now = _providerNow(data);
 
     final locationLabel = districtName ?? 'Current Location';
 
-    // ── Flood / Heavy Rain ──
-    if (precip >= _floodEmergencyPrecip) {
+    // ── Flood — rate-based flash-flood rules (mm/h) ──
+    if (precipRate >= _floodEmergencyPrecip) {
       alerts.add(
         AlertItem(
           title: '$locationLabel — Flood Warning',
@@ -63,12 +75,12 @@ class WeatherAlertDeriver {
           severity: SeverityLevel.emergency,
           timestamp: now,
           description:
-              'Heavy rainfall (${precip.toStringAsFixed(1)} mm/h) detected. '
+              'Heavy rainfall (${precipRate.toStringAsFixed(1)} mm/h) detected. '
               'Risk of flash flooding in low-lying areas. Move to higher ground '
               'and monitor DMC instructions.',
         ),
       );
-    } else if (precip >= _floodWarningPrecip) {
+    } else if (precipRate >= _floodWarningPrecip) {
       alerts.add(
         AlertItem(
           title: '$locationLabel — Flood Watch',
@@ -76,12 +88,12 @@ class WeatherAlertDeriver {
           severity: SeverityLevel.warning,
           timestamp: now,
           description:
-              'Significant rainfall (${precip.toStringAsFixed(1)} mm/h). '
+              'Significant rainfall (${precipRate.toStringAsFixed(1)} mm/h). '
               'Water levels may rise. Stay alert and prepare to evacuate if '
               'conditions worsen.',
         ),
       );
-    } else if (precip >= _rainAdvisoryPrecip && precipProb >= 50) {
+    } else if (precipRate >= _rainAdvisoryPrecip && precipProb >= 50) {
       alerts.add(
         AlertItem(
           title: '$locationLabel — Heavy Rain Advisory',
@@ -89,9 +101,63 @@ class WeatherAlertDeriver {
           severity: SeverityLevel.advisory,
           timestamp: now,
           description:
-              'Rainfall of ${precip.toStringAsFixed(1)} mm/h with '
+              'Rainfall of ${precipRate.toStringAsFixed(1)} mm/h with '
               '${precipProb.toStringAsFixed(0)}% probability. Monitor local '
               'water levels.',
+        ),
+      );
+    }
+
+    // ── Flood — accumulation-based river/urban flooding (mm per day) ──
+    if (precipSum >= _floodDailyCriticalMm) {
+      alerts.add(
+        AlertItem(
+          title: '$locationLabel — Critical Flood Warning',
+          alertType: SLAlertType.flood,
+          severity: SeverityLevel.critical,
+          timestamp: now,
+          description:
+              '${precipSum.toStringAsFixed(0)} mm of rainfall forecast today. '
+              'Severe river and urban flooding likely. Evacuate flood-prone '
+              'areas and follow DMC evacuation orders.',
+        ),
+      );
+    } else if (precipSum >= _floodDailyEmergencyMm) {
+      alerts.add(
+        AlertItem(
+          title: '$locationLabel — Emergency Flood Warning',
+          alertType: SLAlertType.flood,
+          severity: SeverityLevel.emergency,
+          timestamp: now,
+          description:
+              '${precipSum.toStringAsFixed(0)} mm of rainfall forecast today. '
+              'Major flooding expected. Move to higher ground and avoid '
+              'low-lying routes.',
+        ),
+      );
+    } else if (precipSum >= _floodDailyWarningMm) {
+      alerts.add(
+        AlertItem(
+          title: '$locationLabel — Flood Watch',
+          alertType: SLAlertType.flood,
+          severity: SeverityLevel.warning,
+          timestamp: now,
+          description:
+              '${precipSum.toStringAsFixed(0)} mm of rainfall forecast today. '
+              'Water levels may rise sharply. Stay alert.',
+        ),
+      );
+    } else if (precipSum >= _floodDailyAdvisoryMm && precipProb >= 60) {
+      alerts.add(
+        AlertItem(
+          title: '$locationLabel — Rainfall Accumulation Advisory',
+          alertType: SLAlertType.flood,
+          severity: SeverityLevel.advisory,
+          timestamp: now,
+          description:
+              '${precipSum.toStringAsFixed(0)} mm of rainfall forecast today '
+              '(${precipProb.toStringAsFixed(0)}% chance). Ground saturation '
+              'and localised flooding possible.',
         ),
       );
     }
@@ -170,8 +236,9 @@ class WeatherAlertDeriver {
       );
     }
 
-    // ── Landslide Watch (for hill-region districts) ──
-    if (cloudCover >= _landslideCloudCover && precip >= _rainAdvisoryPrecip) {
+    // ── Landslide Watch (for hill-region districts) — driven by today's
+    //    rainfall accumulation, not the instantaneous rate. ──
+    if (cloudCover >= _landslideCloudCover && precipSum >= _floodDailyAdvisoryMm) {
       alerts.add(
         AlertItem(
           title: '$locationLabel — Landslide Watch',
@@ -222,7 +289,7 @@ class WeatherAlertDeriver {
     double? realLongitude,
   }) {
     final events = <TimelineEvent>[];
-    final now = DateTime.now();
+    final now = _providerNow(data);
     final locationLabel = districtName ?? 'Current Location';
     final district = SLDistrict.fromDisplayName(districtName);
 
@@ -230,22 +297,11 @@ class WeatherAlertDeriver {
     final currentAlerts = deriveAlerts(data, districtName: districtName);
     int id = 0;
 
-    // Earthquake context — if any current alert qualifies as a seismic
-    // event we remember it so we can attach a tsunami bulletin to it.
-    // Tsunami is NEVER shown on its own.
-    bool hasEarthquakeContext = currentAlerts.any(
-      (a) => a.alertType == SLAlertType.earthquake,
-    );
-
     for (final alert in currentAlerts) {
       final fields = _detailFields(
-        alert: alert,
-        current: data.current,
         district: district,
         realLatitude: realLatitude,
         realLongitude: realLongitude,
-        isDaily: false,
-        hasEarthquakeContext: hasEarthquakeContext,
       );
       events.add(
         TimelineEvent(
@@ -256,44 +312,8 @@ class WeatherAlertDeriver {
           location: locationLabel,
           severity: alert.severity,
           time: now,
-          maxIntensity: fields.maxIntensity,
-          magnitude: fields.magnitude,
-          magnitudeLabel: fields.magnitudeLabel,
-          depthKm: fields.depthKm,
-          depthLabel: fields.depthLabel,
-          tsunamiFlag: fields.tsunamiFlag,
           latitude: fields.latitude,
           longitude: fields.longitude,
-        ),
-      );
-    }
-
-    // Attach a tsunami bulletin for the most recent earthquake event.
-    // Only generated when there is real earthquake context.
-    if (hasEarthquakeContext) {
-      final eq = currentAlerts.firstWhere(
-        (a) => a.alertType == SLAlertType.earthquake,
-      );
-      events.add(
-        TimelineEvent(
-          id: 'derived_${id++}',
-          type: SLAlertType.tsunami.name,
-          title: '$locationLabel — Tsunami Bulletin',
-          description:
-              'Tsunami advisory issued following the seismic event near '
-              '${eq.title.split('—').last.trim()}. Coastal residents should '
-              'move to higher ground and follow DMC instructions.',
-          location: locationLabel,
-          severity: SeverityLevel.critical,
-          time: now,
-          maxIntensity: 7,
-          magnitude: null,
-          magnitudeLabel: 'M',
-          depthKm: 10.0,
-          depthLabel: 'Open ocean',
-          tsunamiFlag: true,
-          latitude: realLatitude ?? district?.center.latitude,
-          longitude: realLongitude ?? district?.center.longitude,
         ),
       );
     }
@@ -305,13 +325,9 @@ class WeatherAlertDeriver {
 
       for (final alert in dayAlerts) {
         final fields = _detailFields(
-          alert: alert,
-          current: day,
           district: district,
           realLatitude: realLatitude,
           realLongitude: realLongitude,
-          isDaily: true,
-          hasEarthquakeContext: false,
         );
         events.add(
           TimelineEvent(
@@ -321,13 +337,11 @@ class WeatherAlertDeriver {
             description: alert.description,
             location: locationLabel,
             severity: alert.severity,
-            time: now.add(Duration(days: i)),
-            maxIntensity: fields.maxIntensity,
-            magnitude: fields.magnitude,
-            magnitudeLabel: fields.magnitudeLabel,
-            depthKm: fields.depthKm,
-            depthLabel: fields.depthLabel,
-            tsunamiFlag: fields.tsunamiFlag,
+            // Forecast events are anchored to midnight of their day in the
+            // provider-local frame (daily values are whole-day aggregates —
+            // there is no more precise valid-from).
+            time: DateTime(now.year, now.month, now.day)
+                .add(Duration(days: i)),
             latitude: fields.latitude,
             longitude: fields.longitude,
           ),
@@ -335,210 +349,64 @@ class WeatherAlertDeriver {
       }
     }
 
-    // Sort by time descending (newest first)
-    events.sort((a, b) => b.time.compareTo(a.time));
+    // Sort chronologically ascending — the timeline rail renders "now"
+    // first, then upcoming days. (Descending put the furthest FUTURE
+    // forecast above the present: an inverted timeline.)
+    events.sort((a, b) => a.time.compareTo(b.time));
     return events;
   }
 
   // ── Detail field derivation ─────────────────────────────────────────
 
-  /// Computes the detail-screen fields (intensity, magnitude, depth,
-  /// tsunami flag, lat/lng) from the underlying weather data and the
-  /// alert that fired.
+  /// Computes the map-placement fields (lat/lng) for the detail screen.
   ///
   /// [realLatitude] / [realLongitude] — when provided, these are the
   /// actual loaded location coordinates and are preferred over the
   /// district center so the cross icon lands on the real spot.
   ///
-  /// [hasEarthquakeContext] — tsunami flag is only set when there is a
-  /// concurrent earthquake event. Tsunami is never shown on its own.
+  /// This deriver deliberately does NOT fabricate seismic-style fields
+  /// (max intensity / magnitude / depth / tsunami flag). WeatherAPI data
+  /// has no seismic input, and rendering synthesised "MMI 7"/"magnitude"
+  /// numbers as authoritative readings in a disaster-prevention app is
+  /// misinformation. The detail screen renders '—' when these are absent;
+  /// earthquake/tsunami bulletins appear only from a verified upstream
+  /// feed (e.g. the GDACS-sourced SOS alert list).
   static _DetailFields _detailFields({
-    required AlertItem alert,
-    required dynamic current, // CurrentWeather or DailyWeather
     required SLDistrict? district,
-    required bool isDaily,
     double? realLatitude,
     double? realLongitude,
-    bool hasEarthquakeContext = false,
   }) {
-    final precip = _readPrecip(current, isDaily);
-    final wind = _readWind(current, isDaily);
-    final isThunder = _isThunderstorm(_readWeatherCode(current, isDaily));
-
     // Prefer the actual loaded location over the district center so
     // the cross icon shows up at the real spot on the map.
     final lat = realLatitude ?? district?.center.latitude;
     final lng = realLongitude ?? district?.center.longitude;
 
-    // Tsunami flag — only true for actual tsunami bulletins that are
-    // attached to a real earthquake event. A standalone tsunami alert
-    // (without earthquake context) is suppressed.
-    final tsunamiFlag = alert.alertType == SLAlertType.tsunami &&
-        hasEarthquakeContext;
-
-    // Intensity: 1–7 scale (JMA-style). Higher = more severe.
-    // Driven by the actual precip / wind value that triggered the alert,
-    // not by the severity enum.
-    final intensity = _intensityFromConditions(
-      alertType: alert.alertType,
-      precipMm: precip,
-      windKph: wind,
-      isThunder: isThunder,
-    );
-
-    // Magnitude: a number whose unit depends on the event type.
-    final mag = _magnitudeFromConditions(
-      alertType: alert.alertType,
-      precipMm: precip,
-      windKph: wind,
-    );
-    final magLabel = _magnitudeLabelFor(alert.alertType);
-
-    // Depth: a physical depth in km appropriate to the event type.
-    final depth = _depthForAlertType(alert.alertType);
-
-    return _DetailFields(
-      maxIntensity: intensity,
-      magnitude: mag,
-      magnitudeLabel: magLabel,
-      depthKm: depth.km,
-      depthLabel: depth.label,
-      tsunamiFlag: tsunamiFlag,
-      latitude: lat,
-      longitude: lng,
-    );
-  }
-
-  static int? _intensityFromConditions({
-    required SLAlertType alertType,
-    required double precipMm,
-    required double windKph,
-    required bool isThunder,
-  }) {
-    switch (alertType) {
-      case SLAlertType.flood:
-        // Map precipitation (mm) onto a 1–7 intensity scale.
-        if (precipMm >= 50) return 7;
-        if (precipMm >= 30) return 6;
-        if (precipMm >= 15) return 5;
-        if (precipMm >= 5) return 4;
-        if (precipMm >= 1) return 3;
-        return 2;
-      case SLAlertType.cyclone:
-        // Saffir–Simpson–style mapping by sustained wind (km/h).
-        if (windKph >= 252) return 7; // Cat 5
-        if (windKph >= 178) return 6; // Cat 4
-        if (windKph >= 154) return 5; // Cat 3
-        if (windKph >= 118) return 4; // Cat 2
-        if (windKph >= 88) return 3; // Cat 1
-        if (windKph >= 62) return 2; // TS
-        return 1;
-      case SLAlertType.lightning:
-        return isThunder ? 4 : 3;
-      case SLAlertType.landslide:
-        return precipMm >= 50 ? 6 : (precipMm >= 15 ? 5 : 4);
-      case SLAlertType.coastalWarning:
-        return windKph >= 88 ? 4 : 3;
-      case SLAlertType.tsunami:
-        return 7;
-      case SLAlertType.earthquake:
-        return 6;
-    }
-  }
-
-  static double? _magnitudeFromConditions({
-    required SLAlertType alertType,
-    required double precipMm,
-    required double windKph,
-  }) {
-    switch (alertType) {
-      case SLAlertType.flood:
-      case SLAlertType.landslide:
-        // Rainfall magnitude: total millimetres.
-        return precipMm;
-      case SLAlertType.cyclone:
-        // Wind magnitude: km/h divided by 10 → 1-decimal "Richter-like" number.
-        if (windKph <= 0) return null;
-        return double.parse((windKph / 10).toStringAsFixed(1));
-      case SLAlertType.lightning:
-        // Storm intensity proxy: 0–10 from thunderstorm code presence.
-        return 0;
-      case SLAlertType.coastalWarning:
-        return windKph > 0
-            ? double.parse((windKph / 10).toStringAsFixed(1))
-            : null;
-      case SLAlertType.tsunami:
-        return null; // Tsunami magnitude requires a dedicated scale.
-      case SLAlertType.earthquake:
-        return null; // Earthquake magnitude requires a seismic source.
-    }
-  }
-
-  static String? _magnitudeLabelFor(SLAlertType alertType) {
-    switch (alertType) {
-      case SLAlertType.flood:
-      case SLAlertType.landslide:
-        return 'mm';
-      case SLAlertType.cyclone:
-      case SLAlertType.coastalWarning:
-      case SLAlertType.earthquake:
-        return 'M';
-      case SLAlertType.lightning:
-        return 'idx';
-      case SLAlertType.tsunami:
-        return null;
-    }
-  }
-
-  static _DepthHint _depthForAlertType(SLAlertType type) {
-    switch (type) {
-      case SLAlertType.flood:
-      case SLAlertType.landslide:
-        return _DepthHint(0.0, 'Surface');
-      case SLAlertType.cyclone:
-        return _DepthHint(1.0, 'Atmospheric boundary layer');
-      case SLAlertType.lightning:
-        return _DepthHint(4.0, 'Cloud-to-ground');
-      case SLAlertType.coastalWarning:
-        return _DepthHint(0.0, 'Coastal');
-      case SLAlertType.tsunami:
-        return _DepthHint(10.0, 'Open ocean');
-      case SLAlertType.earthquake:
-        return _DepthHint(10.0, 'Crustal');
-    }
-  }
-
-  // ── Typed reads from CurrentWeather | DailyWeather ──────────────────
-
-  static double _readPrecip(dynamic w, bool isDaily) {
-    if (w == null) return 0;
-    if (isDaily) {
-      final d = w as DailyWeather;
-      return d.precipitationSum;
-    }
-    final c = w as CurrentWeather;
-    return c.precipitation;
-  }
-
-  static double _readWind(dynamic w, bool isDaily) {
-    if (w == null) return 0;
-    if (isDaily) {
-      final d = w as DailyWeather;
-      return d.windSpeedMax;
-    }
-    final c = w as CurrentWeather;
-    return c.windSpeed;
-  }
-
-  static int _readWeatherCode(dynamic w, bool isDaily) {
-    if (w == null) return 1000;
-    if (isDaily) {
-      return (w as DailyWeather).weatherCode;
-    }
-    return (w as CurrentWeather).weatherCode;
+    return _DetailFields(latitude: lat, longitude: lng);
   }
 
   // ── Helpers ─────────────────────────────────────────────────────────
+
+  /// Wall-clock "now" expressed in the location's own clock frame (the
+  /// UTC offset captured from the provider). All WeatherAPI timestamps
+  /// are parsed as provider-local wall-clock times, so comparisons and
+  /// user-facing labels must use the same frame — otherwise a device in
+  /// another timezone sees "now" shifted by hours and today/tomorrow
+  /// boundaries land on the wrong calendar day.
+  static DateTime _providerNow(WeatherData data) =>
+      DateTime.now().toUtc().add(data.providerOffset);
+
+  /// Peak hourly precipitation RATE (mm/h) across the current hour plus
+  /// the next 6 forecast hours, blended with the instantaneous observed
+  /// rate so a ground-truth cloudburst counts even if the hourly grid
+  /// smooths it away.
+  static double _peakHourlyPrecipRate(WeatherData data) {
+    var peak = data.current.precipitation;
+    for (final h in data.hourly.take(7)) {
+      final mm = h.precipitation;
+      if (mm > peak) peak = mm;
+    }
+    return peak;
+  }
 
   /// Returns true when [weatherCode] indicates a thunderstorm. Uses the
   /// WeatherAPI.com condition code range (1000–1282).
@@ -581,6 +449,11 @@ class WeatherAlertDeriver {
     }
 
     if (day.windSpeedMax >= _cycloneWarningWind) {
+      // Gusts are only mentioned when the provider actually supplied them
+      // (older snapshots cache them as null) — never "Gusts may reach 0".
+      final gustLine = day.windGustsMax != null && day.windGustsMax! > 0
+          ? ' Gusts may reach ${day.windGustsMax!.toStringAsFixed(0)} km/h.'
+          : '';
       alerts.add(
         AlertItem(
           title: '$locationLabel — Strong Wind Forecast ($dayLabel)',
@@ -589,8 +462,7 @@ class WeatherAlertDeriver {
           timestamp: now,
           description:
               'Winds up to ${day.windSpeedMax.toStringAsFixed(0)} km/h '
-              'forecast. Gusts may reach '
-              '${day.windGustsMax.toStringAsFixed(0)} km/h.',
+              'forecast.$gustLine',
         ),
       );
     }
@@ -647,29 +519,11 @@ class AlertItem {
 /// Internal carrier for the detail-screen fields computed by
 /// [_detailFields]. Spread into [TimelineEvent] by name.
 class _DetailFields {
-  final int? maxIntensity;
-  final double? magnitude;
-  final String? magnitudeLabel;
-  final double? depthKm;
-  final String? depthLabel;
-  final bool tsunamiFlag;
   final double? latitude;
   final double? longitude;
 
   const _DetailFields({
-    required this.maxIntensity,
-    required this.magnitude,
-    required this.magnitudeLabel,
-    required this.depthKm,
-    required this.depthLabel,
-    required this.tsunamiFlag,
     required this.latitude,
     required this.longitude,
   });
-}
-
-class _DepthHint {
-  final double? km;
-  final String label;
-  const _DepthHint(this.km, this.label);
 }

@@ -21,6 +21,13 @@ class SosAlertBanner extends StatefulWidget {
 
 class _SosAlertBannerState extends State<SosAlertBanner>
     with SingleTickerProviderStateMixin {
+  /// Alert ids that have already produced a haptic this session. The banner
+  /// is re-mounted on every tab switch / rebuild, so firing heavyImpact()
+  /// straight from initState makes the phone buzz each time the user taps
+  /// back to Home — a false "new alert!" alarm. Dedup per id so the buzz
+  /// tracks genuine arrivals, not widget lifecycle.
+  static final Set<String> _hapticFiredFor = <String>{};
+
   late final AnimationController _pulse;
   late final Animation<double> _pulseAnim;
 
@@ -36,7 +43,9 @@ class _SosAlertBannerState extends State<SosAlertBanner>
     );
     if (widget.alert.severity == SeverityLevel.critical) {
       _pulse.repeat(reverse: true);
-      HapticFeedback.heavyImpact();
+      if (_hapticFiredFor.add(widget.alert.id)) {
+        HapticFeedback.heavyImpact();
+      }
     }
   }
 

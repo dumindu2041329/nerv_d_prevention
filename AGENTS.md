@@ -14,13 +14,13 @@ This project is a Flutter-based disaster prevention and weather alert mobile app
 - **Dependency Injection:** [`get_it`](lib/core/di/injection.dart) (^9.2.1)
 - **Routing:** [`go_router`](lib/core/router/app_router.dart) (^17.2.3) — ShellRoute with 5 bottom tabs + push route
 - **Network:** [`dio`](lib/data/remote/weatherapi/weather_api_client.dart) (^5.7.0) + `dio_cache_interceptor` (^3.5.0)
-- **Local Storage:** [`hive_flutter`](lib/data/local/hive/hive_service.dart) (^1.1.0) — two boxes: `weather_cache` and `settings`
+- **Local Storage:** [`hive_flutter`](lib/data/local/hive/hive_service.dart) (^1.1.0) — three boxes: `weather_cache`, `settings`, and `alerts_cache`
 - **Location & Maps:** [`flutter_map`](lib/presentation/screens/map/map_screen.dart) (^8.3.0), [`latlong2`](lib/core/constants/app_sl_constants.dart) (^0.9.1), [`geolocator`](lib/data/repositories/weather_repository_impl.dart) (^14.0.2)
-- **Weather Data:** **WeatherAPI.com** called directly from the Flutter client — single `/forecast.json` request returns current + hourly + daily (see [`lib/data/remote/weatherapi/weather_api_client.dart`](lib/data/remote/weatherapi/weather_api_client.dart))
-- **Geocoding:** **MapTiler Geocoding API** for forward search and reverse geocoding (see [`lib/data/remote/maptiler/maptiler_geocoding_client.dart`](lib/data/remote/maptiler/maptiler_geocoding_client.dart))
-- **Map Tiles:** MapTiler hybrid tiles — API key from `.env` via `flutter_dotenv`
-- **Weather Overlay:** OpenWeatherMap precipitation tile overlay on all map screens — API key from `.env`
-- **API Keys:** Stored in `.env` file (gitignored), loaded via `flutter_dotenv` in `main.dart`. Keys: `MAPTILER_API_KEY`, `OWM_API_KEY`, `WEATHERAPI_KEY`
+- **Weather Data:** **WeatherAPI.com** `/forecast.json`, proxied through the **`weather` Supabase Edge Function** (never called directly from the client). The Flutter [`WeatherApiClient`](lib/data/remote/weatherapi/weather_api_client.dart) invokes the function via `supabase.functions.invoke('weather', ...)`.
+- **Geocoding:** **MapTiler Geocoding API** (forward search + reverse geocode), proxied through the **`geocode` Supabase Edge Function** (see [`lib/data/remote/maptiler/maptiler_geocoding_client.dart`](lib/data/remote/maptiler/maptiler_geocoding_client.dart))
+- **Map Tiles:** MapTiler hybrid tiles, proxied through the **`tiles` Supabase Edge Function**
+- **Weather Overlay:** OpenWeatherMap tile overlays, also proxied through the `tiles` Edge Function
+- **API Keys:** Provider keys (`MAPTILER_API_KEY`, `OWM_API_KEY`, `WEATHERAPI_KEY`) live **only** in **Supabase Secrets** (`supabase secrets set`) and are read server-side by the Edge Functions. The client `.env` (gitignored, loaded via `flutter_dotenv` in `main.dart`) contains **only public config** — `SUPABASE_URL` + `SUPABASE_ANON_KEY`. `main.dart` fails the build in release mode if a secret key is present in `.env`.
 - **Fonts:** `google_fonts` (^8.1.0) — Inter loaded at runtime; no bundled font assets
 
 ## Design System Principles
@@ -45,8 +45,10 @@ lib/
 │   └── utils/            # DateTime, String formatting, WeatherAlertDeriver (threshold-based alert derivation)
 ├── data/
 │   ├── remote/
-│   │   ├── weatherapi/      # WeatherApiClient (Dio → WeatherAPI.com /forecast.json)
-│   │   └── maptiler/        # MaptilerGeocodingClient (forward search + reverse geocode)
+│   │   ├── weatherapi/      # WeatherApiClient (→ Supabase `weather` Edge Function)
+│   │   ├── maptiler/        # MaptilerGeocodingClient (→ Supabase `geocode` Edge Function)
+│   │   ├── alerts/          # SosAlertApiClient (reads alerts.json from Supabase Storage)
+│   │   └── supabase/        # SupabaseService, ContactApiClient
 │   ├── local/hive/          # HiveService (weather_cache + settings boxes)
 │   └── repositories/        # WeatherRepositoryImpl, SettingsRepositoryImpl
 ├── domain/
@@ -68,7 +70,7 @@ lib/
   - `_FetchWeatherInBackground` — private event; fetches weather and emits `WeatherLoaded`
   - No stale-cache emit on tab switch — always emits `WeatherLoading` first to prevent cross-tab data leakage
 - **SettingsBloc:** Single `SettingsState` with all preference fields. Events for each setting toggle/change.
-- **No AlertBloc yet** — alerts are currently derived from weather thresholds by [`WeatherAlertDeriver`](lib/core/utils/weather_alert_deriver.dart). A separate `AlertBloc` is planned (see [`plans/dmc_alert_integration_plan.md`](plans/dmc_alert_integration_plan.md)).
+- **No AlertBloc is not the case anymore** — an `AlertBloc` ([`lib/presentation/blocs/alerts/`](lib/presentation/blocs/alerts/)) loads the SOS feed from Supabase Storage; a separate [`WeatherAlertDeriver`](lib/core/utils/weather_alert_deriver.dart) additionally derives threshold-based alerts from the weather snapshot for the timeline/posture.
 - **No usecases layer** — BLoCs call repositories directly. This is intentional simplification.
 
 ### 3. Island-wide vs Local Toggle
@@ -93,12 +95,12 @@ The `NationalLocalToggle` widget is shared across Home, Timeline, and Weather sc
 - **Bottom nav:** 5 tabs — Home (`/home`), Timeline (`/timeline`), Map (`/map`), Weather (`/weather`), Menu (`/menu`). Defined in [`main_scaffold.dart`](lib/presentation/widgets/main_scaffold.dart).
 
 ### 5. Data Handling & API
-- **Weather data pipeline:** `WeatherAPI.com → WeatherApiClient (Dio) → WeatherRepositoryImpl → WeatherBloc → UI`
+- **Weather data pipeline:** `WeatherAPI.com → `weather` Edge Function (key server-side) → WeatherApiClient (Supabase invoke) → WeatherRepositoryImpl → WeatherBloc → UI`
 - **Weather codes are WeatherAPI.com condition codes** (1000–1282), NOT WMO codes. Use [`WeatherCodeMapping`](lib/core/constants/weather_codes.dart) for code→description/emoji mapping.
-- **Cache:** `HiveService` with two Hive boxes: `weather_cache` (weather data) and `settings` (user preferences). Cache TTLs defined in `ApiConstants`: 10 min (current), 1 hour (hourly), 3 hours (daily).
+- **Cache:** `HiveService` with three Hive boxes: `weather_cache`, `settings`, `alerts_cache`. Weather cache is keyed **per location** (`HiveService.weatherCacheKey(lat, lon)`, ~1 km bucket) so Island-wide and Local snapshots never overwrite each other. A single TTL (`ApiConstants.currentWeatherCacheTtl` = 10 min) governs the whole snapshot (current + hourly + daily arrive in one `/forecast.json` call).
 - **Legacy cache support:** [`WeatherRepositoryImpl._tryLegacyCacheDeserialize()`](lib/data/repositories/weather_repository_impl.dart) handles older cache keys. Do not remove this.
 - **Precipitation overlay** uses OpenWeatherMap tile API (`tile.openweathermap.org/map/precipitation_new/{z}/{x}/{y}.png`). Rendered as a `TileLayer` with 0.6 opacity on all map screens.
-- **No backend server** — all API calls are made directly from the Flutter client.
+- **Supabase backend** — weather, geocode, tiles, contact, crisis-pins, and the scheduled `alert-aggregator` run as Supabase Edge Functions; the alert feed is regenerated into the `table-exports` Storage bucket object `alerts.json` (the app's single alert source; the old `timeline_events.json` mirror and the `public.alerts`/`timeline_events` tables were retired — the Timeline is derived client-side from the weather snapshot). `alerts.json` writes go through the service-role key (bypasses RLS); a declarative migration (`20261020_table_exports_bucket.sql`) provisions the bucket with an object-scoped public READ policy. The `alert-aggregator` is invoked every 10 min by `pg_cron` → `pg_net`, which now sends a real `Authorization: Bearer <AGGREGATOR_CRON_SECRET>` header (the secret is stored in **Vault** + **Supabase Secrets**; `verify_jwt=false` only disables the platform JWT check, it does NOT authenticate the caller). Client secrets never leave the server.
 
 ### 6. Sri Lanka Localization
 - **25 districts** in [`SLDistrict`](lib/core/constants/app_sl_constants.dart) enum with `displayName`, `province`, `center` coordinates.
@@ -115,21 +117,20 @@ The `NationalLocalToggle` widget is shared across Home, Timeline, and Weather sc
 - **How to start:** [`How to start.md`](How to start.md) — app startup commands
 
 ### 8. Known Issues & Gotchas
-- [`weather_detail_screen.dart`](lib/presentation/screens/weather_detail/weather_detail_screen.dart) uses **hardcoded placeholder data** — needs wiring to WeatherBloc.
-- `flutter_local_notifications` and `permission_handler` are in pubspec but **not wired up**.
+- [`weather_detail_screen.dart`](lib/presentation/screens/weather_detail/weather_detail_screen.dart) is **bloc-wired** (no longer placeholder data); pass the active `Location` via route `extra` to observe a specific location, otherwise it defaults to the island-wide centre.
+- `flutter_local_notifications` + `permission_handler` **are wired up** via [`LocalNotificationService`](lib/core/notifications/local_notification_service.dart) (SOS + timeline + digest notifications, notification-tap routing).
 - `drift` (SQLite) is NOT in pubspec — only Hive is used for local storage.
 - `home_widget`, `firebase_messaging`, `injectable`/`injectable_generator` are NOT in pubspec — removed from early PRD plans.
 - `freezed` and `json_serializable` are in dev_dependencies but entities use manual `Equatable` classes — no code generation is actually used.
 - **Fonts are loaded via `google_fonts` at runtime** — first launch requires network for fonts. No bundled font assets in `assets/fonts/`.
 - `assets/icons/` and `assets/images/` directories exist but contain only `.gitkeep` — no actual assets yet.
 - The Menu screen in [`menu_screen.dart`](lib/presentation/screens/menu/menu_screen.dart) has hardcoded menu items (Language, Appearance, Notifications, Widget Settings) that are **non-functional** — display-only navigation placeholders.
-- The "Weather data: Open-Meteo" footer text in [`settings_screen.dart`](lib/presentation/screens/settings/settings_screen.dart) is **stale/incorrect** — actual data comes from WeatherAPI.com.
-- `connectivity_plus` is in pubspec but connectivity checks are not implemented — the app relies on cache fallback on network error.
+- `connectivity_plus` was **removed** — the app relies on cache fallback and an explicit `WeatherError` state on network failure.
 - The `geocoding` package has been **removed** — reverse geocoding is handled by `MaptilerGeocodingClient`.
 
 ### 9. What NOT to Do
-- Do NOT use Open-Meteo API or WMO weather codes.
-- Do NOT hardcode API keys — all keys must come from `.env` via `ApiConstants` dotenv getters.
+- Do NOT use Open-Meteo API or WMO weather codes **in the client / `weather` Edge Function pipeline** — the app-facing weather path is WeatherAPI.com condition codes (1000–1282) only. (Server-side exception: the `alert-aggregator` derives district hazard thresholds from Open-Meteo + GDACS; it translates any WMO code to a WeatherAPI code before writing `alerts.json`, so the client never sees a raw WMO code.)
+- Do NOT hardcode API keys, and do NOT add provider/secret keys to `.env` — they belong in **Supabase Secrets** (`supabase secrets set`). `.env` holds only `SUPABASE_URL` + `SUPABASE_ANON_KEY`.
 - Do NOT add a `usecases` layer — the architecture intentionally omits it.
 - Do NOT use `drift`/SQLite — only `hive_flutter` is used for local storage.
 - Do NOT add Firebase, AdMob, or any analytics/tracking SDK.

@@ -5,8 +5,9 @@ import '../../../core/di/injection.dart';
 import '../../../data/remote/contact/contact_api_client.dart';
 
 /// Contact-Us form. Collects name, email, subject, and message, then
-/// hands the content off to the user's mail client via [ContactApiClient]
-/// (mailto: scheme) — actual delivery happens in the OS mail app.
+/// submits them to the Supabase `contact` Edge Function via
+/// [ContactApiClient], which persists the message for support review.
+/// (The old mailto: hand-off was retired.)
 class ContactUsScreen extends StatefulWidget {
   const ContactUsScreen({super.key});
 
@@ -80,8 +81,8 @@ class _ContactUsScreenState extends State<ContactUsScreen> {
       _messageController.clear();
     } else {
       _showSnack(
-        'Could not send message. Please try again or email '
-        '${ContactApiClient.supportEmail} directly.',
+        'Could not send message. Please check your connection and try '
+        'again.',
       );
     }
   }
@@ -206,9 +207,13 @@ class _ContactUsScreenState extends State<ContactUsScreen> {
                   ),
                 ),
                 const SizedBox(height: AppSpacing.space3),
+                // No recipient address is shown — the real support inbox is
+                // server-side only (contact Edge Function's SUPPORT_INBOX).
+                // Surfacing a hardcoded mailbox in the UI was a placeholder
+                // that risked pointing production users at a personal address.
                 Center(
                   child: Text(
-                    'Messages are delivered to ${ContactApiClient.supportEmail}',
+                    'Your message is sent securely to the NERV support team.',
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: onSurface.withValues(alpha: 0.45),
                       fontSize: 11,

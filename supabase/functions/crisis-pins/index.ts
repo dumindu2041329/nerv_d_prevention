@@ -80,6 +80,18 @@ Deno.serve(async (req: Request) => {
             return json({ error: "Invalid JSON body" }, 400);
         }
 
+        // verify_jwt=true guarantees the gateway passed a valid JWT. Resolve
+        // the actual user so attribution can never be forged via the body.
+        const token = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ?? "";
+        let verifiedUserId: string | null = null;
+        if (token) {
+            const { data: userData } = await admin.auth.getUser(token);
+            verifiedUserId = userData?.user?.id ?? null;
+        }
+        if (!verifiedUserId) {
+            return json({ error: "Authentication required to post a pin" }, 401);
+        }
+
         const type = String(body.type ?? "");
         const name = String(body.name ?? "").trim();
         const lat = Number(body.latitude);
@@ -105,6 +117,17 @@ Deno.serve(async (req: Request) => {
             return json({ error: "Invalid capacity" }, 400);
         }
 
+        // Validate the expiry server-side: must be a real future timestamp no
+        // more than 90 days out. Never trust a client-supplied value blindly.
+        let expiresAt: string | null = null;
+        if (body.expires_at != null) {
+            const t = Date.parse(String(body.expires_at));
+            const maxFuture = Date.now() + 90 * 24 * 60 * 60 * 1000;
+            if (!Number.isNaN(t) && t > Date.now() && t <= maxFuture) {
+                expiresAt = new Date(t).toISOString();
+            }
+        }
+
         const pin = {
             id: crypto.randomUUID(),
             type,
@@ -115,10 +138,12 @@ Deno.serve(async (req: Request) => {
             address: body.address ? String(body.address).trim() : null,
             capacity,
             is_open: body.is_open === false ? false : true,
-            posted_by: body.posted_by ? String(body.posted_by) : null,
+            // Derived from the verified session — ignore any client-supplied
+            // posted_by so disaster-pin attribution can't be spoofed.
+            posted_by: verifiedUserId,
             is_verified: false,
             watch_count: 0,
-            expires_at: body.expires_at ?? null,
+            expires_at: expiresAt,
         };
 
         const { data, error } = await admin

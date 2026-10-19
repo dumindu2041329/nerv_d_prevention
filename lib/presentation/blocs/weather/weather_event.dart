@@ -44,18 +44,16 @@ class _FetchWeatherInBackground extends WeatherEvent {
   final Location location;
   final bool forceRefresh;
 
+  /// Monotonic request id from the bloc. Results whose generation is not
+  /// the latest are discarded (superseded by a newer fix/request).
+  final int generation;
+
   const _FetchWeatherInBackground({
     required this.location,
     this.forceRefresh = false,
+    required this.generation,
   });
 
   @override
-  List<Object?> get props => [location, forceRefresh];
-}
-
-class _GpsFailed extends WeatherEvent {
-  const _GpsFailed();
-
-  @override
-  List<Object?> get props => [];
+  List<Object?> get props => [location, forceRefresh, generation];
 }

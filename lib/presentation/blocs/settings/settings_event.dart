@@ -19,6 +19,19 @@ class ToggleNotifications extends SettingsEvent {
   const ToggleNotifications();
 }
 
+/// Toggles one per-hazard notification switch. [key] is an SLAlertType.name
+/// (flood, landslide, cyclone, lightning, coastalWarning, tsunami) or the
+/// 'critical' master switch. Critical/Emergency deliveries are never muted.
+class ToggleHazardNotifications extends SettingsEvent {
+  final String key;
+  final bool enabled;
+
+  const ToggleHazardNotifications({required this.key, required this.enabled});
+
+  @override
+  List<Object?> get props => [key, enabled];
+}
+
 class SetLanguage extends SettingsEvent {
   final AppLanguage language;
 

@@ -4,12 +4,14 @@
 // ═══════════════════════════════════════════════════════════════════
 // Schedule: every 10 minutes via Supabase Cron, or invoke manually
 //           with the service role key.
-// Auth:     This function uses SUPABASE_URL +
-//           SUPABASE_SERVICE_ROLE_KEY. Do NOT call from the Flutter
-//           client directly.
+// Auth:     The cron job sends the AGGREGATOR_CRON_SECRET (stored in
+//           Supabase Vault / exposed as a function secret) as a Bearer
+//           token. Manual operators may present the service-role key.
+//           Do NOT call from the Flutter client directly.
 // Sources:  Open-Meteo (forecast) + GDACS RSS.
 // Output:   merges JSON into Supabase Storage bucket `table-exports`
-//           (objects: alerts.json, timeline_events.json). No DB tables.
+//           (objects: alerts.json). No DB tables, no timeline object —
+//           the client derives its timeline locally from the weather feed.
 //
 // Deploy:
 //   supabase functions deploy alert-aggregator \
@@ -65,6 +67,26 @@ const COASTAL_WIND_KMH = 40;
 const CYCLONE_WIND_KMH = 60;
 
 const SL_BBOX = { latMin: 5.5, latMax: 10.0, lngMin: 79.0, lngMax: 82.5 };
+
+// WMO code → WeatherAPI.com condition code (1000–1282). The client's
+// WeatherCodeMapping only understands WeatherAPI codes, so anything the
+// aggregator derives from Open-Meteo WMO codes must be translated before
+// it reaches alerts.json metadata.
+function wmoToWeatherApi(wmo: number | null | undefined): number {
+  if (wmo == null) return 1000; // Clear
+  if (wmo === 0) return 1000; // Clear
+  if (wmo === 1 || wmo === 2) return 1003; // Mainly clear / partly cloudy
+  if (wmo === 3) return 1009; // Overcast
+  if (wmo >= 45 && wmo <= 48) return 1030; // Fog
+  if (wmo >= 51 && wmo <= 57) return 1063; // Drizzle
+  if (wmo >= 61 && wmo <= 65) return 1195; // Rain (light–heavy)
+  if (wmo >= 66 && wmo <= 67) return 1183; // Freezing rain
+  if (wmo >= 71 && wmo <= 77) return 1219; // Snow
+  if (wmo >= 80 && wmo <= 82) return 1063; // Rain showers
+  if (wmo === 85 || wmo === 86) return 1219; // Snow showers
+  if (wmo >= 95 && wmo <= 99) return 1276; // Thunderstorm
+  return 1000;
+}
 
 // ── Supabase client (service role) ────────────────────────────────
 function client() {
@@ -212,7 +234,9 @@ async function deriveFromOpenMeteo(
           `Lightning Alert — ${d.display_name}`,
           "Thunderstorms forecast within 6 hours.",
           "open_meteo",
-          {},
+          // Translate the WMO code to a WeatherAPI.com condition code so
+          // the client's WeatherCodeMapping (1000–1282) can resolve it.
+          { weatherCode: wmoToWeatherApi(weather_code[startIdx]) },
         ),
       );
     }
@@ -263,11 +287,16 @@ function makeAlert(
   source: DerivedAlert["source"],
   metadata: Record<string, unknown>,
 ): DerivedAlert {
-  const expires = new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString();
+  // Deterministic id: bucket the current UTC 6-hour window into the key so
+  // the id is stable for the whole life of the alert (expires_at matches
+  // the bucket end exactly) and re-aggregation is a true idempotent
+  // update. Previously the id rotated every 30 minutes while alerts lived
+  // 6 hours, duplicating one persistent hazard up to 12 times.
+  const bucket = Math.floor(Date.now() / (6 * 60 * 60 * 1000));
+  const bucketEnd = (bucket + 1) * 6 * 60 * 60 * 1000;
+  const expires = new Date(bucketEnd).toISOString();
   return {
-    // 30-minute bucket keeps the same alert id across re-aggregations,
-    // so the upsert is a true idempotent update.
-    id: `${type}-${d.slug}-${Math.floor(Date.now() / (30 * 60 * 1000))}`,
+    id: `${type}-${d.slug}-${severity}-${bucket}`,
     type,
     headline,
     description,
@@ -302,7 +331,11 @@ async function deriveFromGdacs(): Promise<DerivedAlert[]> {
           "";
       const pubDate =
         item.match(/<pubDate>([\s\S]*?)<\/pubDate>/)?.[1]?.trim() ?? "";
-      const ts = Date.parse(pubDate) || Date.now();
+      // Stable id component: the bulletin's own publish date (day-grain),
+      // NOT Date.now() — otherwise every 10-minute poll minted a brand-new
+      // "critical" alert and re-notified the whole user base.
+      const dayKey = pubDate.slice(0, 16).replace(/[^A-Za-z0-9]/g, "") ||
+        new Date().toISOString().slice(0, 10);
 
       const isCyclone = /cyclone|tropical/i.test(title + " " + link);
       const isTsunami = /tsunami/i.test(title + " " + link);
@@ -315,23 +348,28 @@ async function deriveFromGdacs(): Promise<DerivedAlert[]> {
       const nearSL =
         lat !== null &&
         lng !== null &&
+        Number.isFinite(lat) &&
+        Number.isFinite(lng) &&
         lat >= SL_BBOX.latMin &&
         lat <= SL_BBOX.latMax &&
         lng >= SL_BBOX.lngMin &&
         lng <= SL_BBOX.lngMax;
 
+      // This is a Sri Lanka–localized product. Events outside the SL bbox —
+      // or bulletins whose coordinates we could not parse — must NOT be
+      // published as local critical alerts pinned onto Colombo (or 0,0).
+      if (!nearSL) continue;
+
       if (isCyclone) {
         out.push({
-          id: `gdacs-cyclone-${ts}`,
+          id: `gdacs-cyclone-${dayKey}`,
           type: "cyclone",
-          headline: `GDACS Cyclone — ${
-            nearSL ? "Sri Lanka Vicinity" : "Indian Ocean"
-          }`,
+          headline: `GDACS Cyclone — Sri Lanka Vicinity`,
           description: title,
           severity: "critical",
-          district: nearSL ? "batticaloa" : "colombo",
-          latitude: lat ?? 7.8731,
-          longitude: lng ?? 80.7718,
+          district: "batticaloa",
+          latitude: lat!,
+          longitude: lng!,
           source: "gdacs",
           expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
           metadata: { link, nearSL },
@@ -339,14 +377,14 @@ async function deriveFromGdacs(): Promise<DerivedAlert[]> {
       }
       if (isTsunami) {
         out.push({
-          id: `gdacs-tsunami-${ts}`,
+          id: `gdacs-tsunami-${dayKey}`,
           type: "tsunami",
-          headline: "GDACS Tsunami Bulletin — Indian Ocean",
+          headline: "GDACS Tsunami Bulletin — Sri Lanka Vicinity",
           description: title,
           severity: "critical",
           district: "colombo",
-          latitude: lat ?? 0,
-          longitude: lng ?? 0,
+          latitude: lat!,
+          longitude: lng!,
           source: "gdacs",
           expires_at: new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString(),
           metadata: { link },
@@ -368,8 +406,6 @@ type Supa = ReturnType<typeof client>;
 
 const STORAGE_BUCKET = "table-exports";
 const ALERTS_PATH = "alerts.json";
-const TIMELINE_PATH = "timeline_events.json";
-const TIMELINE_RETENTION_HOURS = 72;
 
 type StoredRow = Record<string, unknown> & {
   id: string;
@@ -439,43 +475,20 @@ async function persist(alerts: DerivedAlert[]) {
     updated_at: nowIso,
   }));
 
-  const incomingEvents: StoredRow[] = incomingAlerts.map((r) => ({
-    id: `${r.id}-timeline`,
-    alert_id: r.id,
-    title: r.headline,
-    description: r.description,
-    event_type: r.type,
-    severity: r.severity,
-    occurred_at: r.issued_at,
-    district: r.district,
-    latitude: r.latitude,
-    longitude: r.longitude,
-    location: r.district,
-    metadata: r.metadata,
-    created_at: r.created_at,
-  }));
-
-  const [existingAlerts, existingEvents] = await Promise.all([
-    readStored(supa, ALERTS_PATH),
-    readStored(supa, TIMELINE_PATH),
-  ]);
+  // Only alerts.json is published. The former timeline_events.json mirror
+  // had zero readers in the client (the Timeline screen derives its events
+  // locally from the weather snapshot), so it was removed.
+  const existingAlerts = await readStored(supa, ALERTS_PATH);
 
   // Prune expired alerts (parity with the retired expire_stale_alerts RPC).
   const liveAlerts = mergeById(existingAlerts, incomingAlerts).filter(
     (a) => !a.expiry_at || Date.parse(String(a.expiry_at)) > nowMs,
   );
-  // Keep a bounded rolling timeline window (parity with get_timeline_events).
-  const cutoff = nowMs - TIMELINE_RETENTION_HOURS * 60 * 60 * 1000;
-  const liveEvents = mergeById(existingEvents, incomingEvents).filter(
-    (e) => Date.parse(String(e.occurred_at)) >= cutoff,
-  );
 
   await writeJson(supa, ALERTS_PATH, liveAlerts);
-  await writeJson(supa, TIMELINE_PATH, liveEvents);
 
   return {
     alerts: liveAlerts.length,
-    events: liveEvents.length,
     written: incomingAlerts.length,
   };
 }
@@ -485,6 +498,27 @@ Deno.serve(async (req: Request) => {
   if (req.method !== "GET" && req.method !== "POST") {
     return new Response("Method not allowed", { status: 405 });
   }
+
+  // Only the Supabase Cron scheduler (which carries the
+  // AGGREGATOR_CRON_SECRET as a Bearer token) or a manual operator
+  // presenting the service-role key may invoke this feed-writer. Without
+  // this guard any internet caller could burn Open-Meteo / GDACS quota AND
+  // overwrite the alerts.json that every app user downloads — a
+  // data-integrity attack surface for a disaster-prevention feed.
+  // NOTE: verify_jwt=false in config.toml only disables the platform JWT
+  // check — it does NOT inject an Authorization header, so pg_net must
+  // send the secret explicitly (see the 20261020 migration).
+  const auth = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ??
+    "";
+  const cronSecret = Deno.env.get("AGGREGATOR_CRON_SECRET") ?? "";
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+  const authorized =
+    (cronSecret !== "" && auth === cronSecret) ||
+    (serviceKey !== "" && auth === serviceKey);
+  if (!authorized) {
+    return new Response("Forbidden", { status: 403 });
+  }
+
   const startedAt = new Date().toISOString();
   try {
     const districts = await loadDistricts();
@@ -510,10 +544,11 @@ Deno.serve(async (req: Request) => {
     );
   } catch (e) {
     console.error("aggregator error", e);
+    // Never echo internal error/stack text back to the caller.
     return new Response(
       JSON.stringify({
         ok: false,
-        error: String(e),
+        error: "internal error",
         started_at: startedAt,
       }),
       { status: 500, headers: { "Content-Type": "application/json" } },

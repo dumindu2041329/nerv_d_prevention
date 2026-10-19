@@ -23,6 +23,28 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 const MAPTILER_KEY = Deno.env.get("MAPTILER_API_KEY");
 const OWM_KEY = Deno.env.get("OWM_API_KEY");
 
+// Allowlists — this function is public (verify_jwt=false, because a
+// TileLayer cannot send an Authorization header), so `style` must never be
+// forwarded to the upstream verbatim or a caller could drive arbitrary
+// paths using the server-side keys.
+const MAPTILER_STYLES = new Set([
+    "hybrid",
+    "satellite",
+    "streets",
+    "outdoors",
+    "terrain",
+    "topo",
+    "dark",
+]);
+const OWM_STYLES = new Set([
+    "precipitation_new",
+    "clouds_new",
+    "temp_new",
+    "wind_new",
+    "snow_new",
+    "pressure_new",
+]);
+
 Deno.serve(async (req) => {
     const url = new URL(req.url);
 
@@ -53,6 +75,24 @@ Deno.serve(async (req) => {
     const [provider, style, z, x, y] = segs;
     if (!/^\d{1,2}$/.test(z) || !/^\d{1,8}$/.test(x) || !/^\d{1,8}$/.test(y)) {
         return new Response("Bad tile coords", { status: 400 });
+    }
+
+    // Style allowlist per provider.
+    if (provider === "maptiler" && !MAPTILER_STYLES.has(style)) {
+        return new Response("Unknown style", { status: 400 });
+    }
+    if (provider === "owm" && !OWM_STYLES.has(style)) {
+        return new Response("Unknown style", { status: 400 });
+    }
+
+    // Range-check z/x/y against 2^z so a scraper cannot request out-of-range
+    // tiles to inflate upstream quota.
+    const zn = Number(z);
+    const xn = Number(x);
+    const yn = Number(y);
+    const maxTile = 1 << zn;
+    if (zn < 0 || zn > 19 || xn < 0 || xn >= maxTile || yn < 0 || yn >= maxTile) {
+        return new Response("Tile out of range", { status: 400 });
     }
 
     let upstream: string;
@@ -96,8 +136,19 @@ Deno.serve(async (req) => {
             },
         });
     } catch (err) {
+        // A timeout / DNS / key-revoked / 429 failure is NOT "no rain" —
+        // masking it as a transparent, CDN-cached tile makes an outage
+        // indistinguishable from clear skies and pins the lie for every
+        // user for an hour. Surface it as an uncacheable 503 so the client
+        // can show a stale-layer indicator instead of a blank radar.
         console.error("tile fetch failed:", err);
-        return transparentPng();
+        return new Response("Tile source unavailable", {
+            status: 503,
+            headers: {
+                "Cache-Control": "no-store",
+                "Access-Control-Allow-Origin": "*",
+            },
+        });
     }
 });
 

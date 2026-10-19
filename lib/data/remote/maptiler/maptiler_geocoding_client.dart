@@ -51,8 +51,11 @@ class MaptilerGeocodingClient {
 
     return features.map((f) {
       final center = f['center'] as List?;
-      final lon = (center?[0] as num?)?.toDouble() ?? 0;
-      final lat = (center?[1] as num?)?.toDouble() ?? 0;
+      final lon = (center?[0] as num?)?.toDouble();
+      final lat = (center?[1] as num?)?.toDouble();
+      // Skip features without real coordinates — a (0,0) fallback would
+      // silently fetch weather for the Gulf of Guinea.
+      if (lat == null || lon == null) return null;
       final name = (f['text'] as String?) ?? (f['place_name'] as String?) ?? '';
 
       // Extract country and region from context hierarchy
@@ -71,13 +74,13 @@ class MaptilerGeocodingClient {
       }
 
       return Location(
-        id: (f['id'] as String?) ?? '$lon,$lat',
+        id: (f['id'] as String?) ?? '$lat,$lon',
         name: name,
         country: country,
         admin1: admin1,
         latitude: lat,
         longitude: lon,
       );
-    }).toList();
+    }).whereType<Location>().toList();
   }
 }

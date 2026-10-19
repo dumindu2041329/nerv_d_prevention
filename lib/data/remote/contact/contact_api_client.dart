@@ -11,11 +11,12 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 ///
 /// See `supabase/functions/contact/index.ts`.
 class ContactApiClient {
-  /// Recipient inbox for Contact-Us submissions. The inbox is no longer
-  /// used directly by the client — it remains here for display in the UI
-  /// ("Messages are delivered to …") and for the optional Resend relay
-  /// configured inside the Edge Function.
-  static const String supportEmail = 'nervd.app2demo@gmail.com';
+  /// Placeholder support inbox for local/dev builds ONLY. Production
+  /// deployments must not surface a hardcoded personal mailbox: the real
+  /// recipient lives server-side in the `contact` Edge Function's
+  /// SUPPORT_INBOX secret, and this client no longer displays or uses an
+  /// address in the UI. Retained solely so the Resend-relay note compiles.
+  static const String supportEmail = '';
 
   final SupabaseClient _client;
 

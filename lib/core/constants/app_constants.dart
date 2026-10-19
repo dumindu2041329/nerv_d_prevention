@@ -14,9 +14,9 @@ class ApiConstants {
   static const String overpassBaseUrl = 'https://overpass-api.de/api/interpreter';
   static const String nasaLhasaBaseUrl = 'https://lhasa.apps.opengeo.org';
 
+  // Single TTL: current + hourly + daily arrive in one /forecast.json call
+  // and are cached together under one timestamp, so they expire as a unit.
   static const Duration currentWeatherCacheTtl = Duration(minutes: 10);
-  static const Duration hourlyForecastCacheTtl = Duration(hours: 1);
-  static const Duration dailyForecastCacheTtl = Duration(hours: 3);
 
   // ---------------------------------------------------------------------------
   // Map tile URLs — proxied through Supabase so provider keys stay server-side.

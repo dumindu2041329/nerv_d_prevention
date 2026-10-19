@@ -29,6 +29,16 @@ class SettingsRepositoryImpl implements SettingsRepository {
   }
 
   @override
+  Future<bool> isHazardEnabled(String alertType) async {
+    return await _hiveService.getSetting<bool>('hazard_$alertType') ?? true;
+  }
+
+  @override
+  Future<void> setHazardEnabled(String alertType, bool value) async {
+    await _hiveService.setSetting('hazard_$alertType', value);
+  }
+
+  @override
   Future<AppLanguage> getLanguage() async {
     final hiveValue = await _hiveService.getSetting<int>('language');
     return AppLanguage.fromHiveValue(hiveValue);
@@ -42,7 +52,7 @@ class SettingsRepositoryImpl implements SettingsRepository {
   @override
   Future<ColourVisionMode> getColourVisionMode() async {
     final index = await _hiveService.getSetting<int>('colour_vision_mode') ?? 0;
-    return ColourVisionMode.values[index];
+    return _safeEnum(ColourVisionMode.values, index, ColourVisionMode.values.first);
   }
 
   @override
@@ -53,7 +63,7 @@ class SettingsRepositoryImpl implements SettingsRepository {
   @override
   Future<ContrastMode> getContrastMode() async {
     final index = await _hiveService.getSetting<int>('contrast_mode') ?? 1;
-    return ContrastMode.values[index];
+    return _safeEnum(ContrastMode.values, index, ContrastMode.values[1 % ContrastMode.values.length]);
   }
 
   @override
@@ -64,7 +74,7 @@ class SettingsRepositoryImpl implements SettingsRepository {
   @override
   Future<TextSizeScale> getTextSizeScale() async {
     final index = await _hiveService.getSetting<int>('text_size_scale') ?? 2;
-    return TextSizeScale.values[index];
+    return _safeEnum(TextSizeScale.values, index, TextSizeScale.values[2 % TextSizeScale.values.length]);
   }
 
   @override
@@ -75,49 +85,19 @@ class SettingsRepositoryImpl implements SettingsRepository {
   @override
   Future<FontWeightScale> getFontWeightScale() async {
     final index = await _hiveService.getSetting<int>('font_weight_scale') ?? 0;
-    return FontWeightScale.values[index];
+    return _safeEnum(FontWeightScale.values, index, FontWeightScale.values.first);
+  }
+
+  /// Returns [values][index] when the cached index is in range, otherwise the
+  /// supplied [fallback]. Guards against Hive cache corruption or an enum
+  /// reorder/refactor throwing RangeError on read.
+  static T _safeEnum<T>(List<T> values, int index, T fallback) {
+    if (index < 0 || index >= values.length) return fallback;
+    return values[index];
   }
 
   @override
   Future<void> setFontWeightScale(FontWeightScale scale) async {
     await _hiveService.setSetting('font_weight_scale', scale.index);
-  }
-
-  @override
-  Future<List<String>> getSavedLocationIds() async {
-    final list = await _hiveService.getSetting<List<dynamic>>(
-      'saved_location_ids',
-    );
-    return list?.cast<String>() ?? [];
-  }
-
-  @override
-  Future<void> addSavedLocationId(String id) async {
-    final ids = await getSavedLocationIds();
-    if (!ids.contains(id)) {
-      ids.add(id);
-      await _hiveService.setSetting('saved_location_ids', ids);
-    }
-  }
-
-  @override
-  Future<void> removeSavedLocationId(String id) async {
-    final ids = await getSavedLocationIds();
-    ids.remove(id);
-    await _hiveService.setSetting('saved_location_ids', ids);
-  }
-
-  @override
-  Future<String?> getSelectedLocationId() async {
-    return _hiveService.getSetting<String>('selected_location_id');
-  }
-
-  @override
-  Future<void> setSelectedLocationId(String? id) async {
-    if (id == null) {
-      await _hiveService.removeSetting('selected_location_id');
-    } else {
-      await _hiveService.setSetting('selected_location_id', id);
-    }
   }
 }

@@ -12,7 +12,7 @@ import '../../../core/localization/app_localizations.dart';
 import '../../blocs/alerts/alert_bloc.dart';
 import '../../blocs/weather/weather_bloc.dart';
 import '../../widgets/national_local_toggle.dart';
-import '../../widgets/sos_alert_banner.dart';
+import '../../widgets/alert_banner.dart';
 import '../../widgets/nerv/nerv_styles.dart';
 import '../../widgets/nerv/deck_header.dart';
 
@@ -125,7 +125,7 @@ class _TimelineScreenState extends State<TimelineScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    ...alertState.alerts.map((a) => SosAlertBanner(alert: a)),
+                    ...alertBannerWidgets(alertState.alerts),
                   ],
                 ),
               );

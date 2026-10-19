@@ -48,11 +48,9 @@ class AlertRepositoryImpl implements AlertRepository {
   Future<void> refresh() async {
     try {
       final fresh = await _apiClient.fetchSriLankaAlerts();
-      if (fresh.isEmpty && _alerts.isNotEmpty) {
-        // Upstream returned nothing (likely a temporary outage). Keep
-        // serving the cached list and do NOT clobber it.
-        return;
-      }
+      // The client now throws on transport/parse failure, so reaching here
+      // with an empty list means the feed is genuinely empty (all alerts
+      // lifted / calm). Clear the cache instead of pinning a stale list.
       final sorted = _sortBySeverity(fresh);
       _alerts = sorted;
       _lastFetched = DateTime.now();
@@ -60,12 +58,13 @@ class AlertRepositoryImpl implements AlertRepository {
     } catch (_) {
       // Network / parse failure — serve cached if we have any.
       // If this is the first app run and there is no cache yet, generate
-      // a deterministic offline fallback so SOS UI still works.
+      // an in-memory offline fallback so SOS UI still works.
       if (_alerts.isEmpty) {
         final fallback = _generateOfflineFallback();
         _alerts = _sortBySeverity(fallback);
         _lastFetched = DateTime.now();
-        await _hiveService.cacheSosAlerts(_alerts);
+        // Intentionally NOT persisted to Hive: the demo alert must never be
+        // mistaken for a real feed on the next launch.
       }
     }
   }

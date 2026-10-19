@@ -13,7 +13,12 @@ import '../../widgets/nerv/deck_header.dart';
 import '../../widgets/nerv/posture_gauge.dart';
 
 class WeatherDetailScreen extends StatefulWidget {
-  const WeatherDetailScreen({super.key});
+  const WeatherDetailScreen({super.key, this.initialLocation});
+
+  /// Location to observe. When null the screen falls back to the island-wide
+  /// centre. Callers should pass the currently-active location (e.g. the
+  /// parent's Local-mode selection) via route `extra`.
+  final Location? initialLocation;
 
   @override
   State<WeatherDetailScreen> createState() => _WeatherDetailScreenState();
@@ -25,13 +30,14 @@ class _WeatherDetailScreenState extends State<WeatherDetailScreen> {
     return BlocProvider(
       create: (_) => getIt<WeatherBloc>()..add(
         LoadWeather(
-          location: const Location(
-            id: 'island_wide',
-            name: 'Sri Lanka',
-            country: 'Sri Lanka',
-            latitude: 7.8731,
-            longitude: 80.7718,
-          ),
+          location: widget.initialLocation ??
+              const Location(
+                id: 'island_wide',
+                name: 'Sri Lanka',
+                country: 'Sri Lanka',
+                latitude: 7.8731,
+                longitude: 80.7718,
+              ),
         ),
       ),
       child: Scaffold(
@@ -205,6 +211,10 @@ class _WeatherDetailScreenState extends State<WeatherDetailScreen> {
     final tempRange = (maxTemp - minTemp) * 0.3;
     final chartMinY = (minTemp - tempRange).floorToDouble();
     final chartMaxY = (maxTemp + tempRange).ceilToDouble();
+    // A flat forecast (all hours equal, common on the coast) collapses the
+    // axis to zero height; a 0 interval makes fl_chart emit duplicate/​
+    // unbounded horizontal grid lines. Force a minimum span.
+    final chartSpan = (chartMaxY - chartMinY) < 2 ? 4.0 : (chartMaxY - chartMinY);
 
     return Container(
       height: 200,
@@ -219,7 +229,7 @@ class _WeatherDetailScreenState extends State<WeatherDetailScreen> {
           gridData: FlGridData(
             show: true,
             drawVerticalLine: false,
-            horizontalInterval: (chartMaxY - chartMinY) / 4,
+            horizontalInterval: chartSpan / 4,
             getDrawingHorizontalLine: (value) {
               return FlLine(
                 color: nerv.hairline,
@@ -430,7 +440,7 @@ class _WeatherDetailScreenState extends State<WeatherDetailScreen> {
     final onSurface = nerv.onSurface;
     final current = data.current;
     final windDir = _windDirectionFromDegrees(current.windDirection);
-    final gustSpeed = data.daily.isNotEmpty ? data.daily.first.windGustsMax : 0.0;
+    final gustSpeed = data.daily.isNotEmpty ? data.daily.first.windGustsMax : null;
 
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 14),
@@ -449,7 +459,9 @@ class _WeatherDetailScreenState extends State<WeatherDetailScreen> {
           _buildWindItem(
             context,
             'GUSTS',
-            gustSpeed > 0 ? '${gustSpeed.toStringAsFixed(0)} km/h' : 'N/A',
+            (gustSpeed != null && gustSpeed > 0)
+                ? '${gustSpeed.toStringAsFixed(0)} km/h'
+                : 'N/A',
           ),
         ],
       ),

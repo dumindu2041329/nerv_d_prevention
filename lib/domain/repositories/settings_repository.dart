@@ -7,6 +7,13 @@ abstract class SettingsRepository {
   Future<bool> isNotificationsEnabled();
   Future<void> setNotificationsEnabled(bool value);
 
+  /// Per-hazard notification opt-outs, keyed by SLAlertType.name
+  /// (flood, landslide, cyclone, lightning, coastalWarning, tsunami)
+  /// plus the 'critical' master switch for non-life-threatening tiers.
+  /// Defaults to enabled when unset.
+  Future<bool> isHazardEnabled(String alertType);
+  Future<void> setHazardEnabled(String alertType, bool value);
+
   Future<AppLanguage> getLanguage();
   Future<void> setLanguage(AppLanguage language);
 
@@ -21,11 +28,4 @@ abstract class SettingsRepository {
 
   Future<FontWeightScale> getFontWeightScale();
   Future<void> setFontWeightScale(FontWeightScale scale);
-
-  Future<List<String>> getSavedLocationIds();
-  Future<void> addSavedLocationId(String id);
-  Future<void> removeSavedLocationId(String id);
-
-  Future<String?> getSelectedLocationId();
-  Future<void> setSelectedLocationId(String? id);
 }

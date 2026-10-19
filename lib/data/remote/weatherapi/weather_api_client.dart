@@ -29,18 +29,28 @@ class WeatherApiClient {
     }
 
     final data = response.data as Map<String, dynamic>;
+    final timezone = data['location']['tz_id'] as String? ?? 'Asia/Colombo';
+    // WeatherAPI returns all forecast timestamps in the location's own
+    // clock. utcoffset (hours relative to UTC) lets us rebuild that frame
+    // on any device, so "now", hour cut-offs and day boundaries are
+    // correct even when the device sits in a different timezone.
+    final utcOffsetHours =
+        (data['location']['utcoffset'] as num?)?.toDouble() ?? 5.5;
+    final providerOffset = Duration(minutes: (utcOffsetHours * 60).round());
+    final nowProvider = DateTime.now().toUtc().add(providerOffset);
+
     final current = _parseCurrent(data['current'] as Map<String, dynamic>);
     final forecastDays =
         (data['forecast']['forecastday'] as List).cast<Map<String, dynamic>>();
-    final hourly = _parseHourly(forecastDays);
+    final hourly = _parseHourly(forecastDays, nowProvider);
     final daily = _parseDaily(forecastDays);
-    final timezone = data['location']['tz_id'] as String? ?? 'UTC';
 
     return WeatherData(
       current: current,
       hourly: hourly,
       daily: daily,
       timezone: timezone,
+      providerOffset: providerOffset,
       lastUpdated: DateTime.now(),
     );
   }
@@ -62,15 +72,16 @@ class WeatherApiClient {
     );
   }
 
-  List<HourlyWeather> _parseHourly(List forecastDays) {
+  List<HourlyWeather> _parseHourly(List forecastDays, DateTime nowProvider) {
     final result = <HourlyWeather>[];
-    final now = DateTime.now();
 
     for (final day in forecastDays) {
       for (final h in (day['hour'] as List)) {
-        final time = DateTime.parse(h['time'] as String);
-        if (time.isBefore(now)) continue;
-        if (result.length >= 12) break;
+        // Parse in the provider's wall-clock frame (the "time" string is
+        // already location-local, e.g. "2026-10-20 18:00").
+        final time = DateTime.parse('${h['time']}:00');
+        if (time.isBefore(nowProvider)) continue;
+        if (result.length >= 24) break;
         result.add(HourlyWeather(
           time: time,
           temperature: (h['temp_c'] as num).toDouble(),
@@ -84,7 +95,7 @@ class WeatherApiClient {
           humidity: (h['humidity'] as num).toDouble(),
         ));
       }
-      if (result.length >= 12) break;
+      if (result.length >= 24) break;
     }
     return result;
   }
@@ -103,11 +114,12 @@ class WeatherApiClient {
         precipitationSum: (d['totalprecip_mm'] as num).toDouble(),
         precipitationProbabilityMax: (d['daily_chance_of_rain'] as num).toDouble(),
         windSpeedMax: (d['maxwind_kph'] as num).toDouble(),
-        windGustsMax: 0,
+        // Real daily gusts (previously hard-coded 0, which leaked
+        // "Gusts may reach 0 km/h" into alert copy).
+        windGustsMax: (d['maxgust_kph'] as num?)?.toDouble(),
         sunrise: _parseAstroTime(date, astro['sunrise'] as String),
         sunset: _parseAstroTime(date, astro['sunset'] as String),
         uvIndexMax: (d['uv'] as num).toDouble(),
-        shortwaveRadiationSum: 0,
       );
     }).toList();
   }

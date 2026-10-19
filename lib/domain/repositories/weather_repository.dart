@@ -12,11 +12,21 @@ abstract class WeatherRepository {
 
   Future<Location?> getLocationFromGps();
 
-  Future<void> cacheWeatherData(WeatherData data);
+  Future<void> cacheWeatherData(
+    WeatherData data, {
+    required double latitude,
+    required double longitude,
+  });
 
-  Future<WeatherData?> getCachedWeatherData();
+  Future<WeatherData?> getCachedWeatherData({
+    required double latitude,
+    required double longitude,
+  });
 
-  Future<bool> isCacheValid();
+  Future<bool> isCacheValid({
+    required double latitude,
+    required double longitude,
+  });
 
   Location? getCachedLocation();
 

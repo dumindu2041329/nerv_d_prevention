@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
 import '../../../domain/entities/auth_user.dart';
@@ -29,6 +30,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     // event reflects the restored session at startup.
     _subscription = _repository.authStateChanges().listen(
       (user) => add(_AuthUserChanged(user)),
+      onError: (Object error, StackTrace stack) {
+        // Never let an auth-stream error surface as an unhandled async throw.
+        debugPrint('Auth state stream error: $error');
+      },
     );
   }
 
@@ -105,16 +110,24 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     AuthSignOutRequested event,
     Emitter<AuthState> emit,
   ) async {
+    // Capture the user BEFORE awaiting — the auth-state stream can emit
+    // (signing us out) between the throw and this catch running, which would
+    // make a `(state as AuthAuthenticated)` cast below throw a TypeError.
+    final currentUser = state is AuthAuthenticated
+        ? (state as AuthAuthenticated).user
+        : null;
     try {
       await _repository.signOut();
       // The auth-state stream emits signedOut → AuthUnauthenticated.
     } on AuthFailure catch (f) {
-      emit(
-        AuthAuthenticated(
-          user: (state as AuthAuthenticated).user,
-          notice: f.message,
-        ),
-      );
+      if (currentUser != null) {
+        emit(
+          AuthAuthenticated(
+            user: currentUser,
+            notice: f.message,
+          ),
+        );
+      }
     }
   }
 

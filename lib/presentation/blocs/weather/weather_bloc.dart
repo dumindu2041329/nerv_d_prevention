@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
 import '../../../core/constants/weather_codes.dart';
@@ -15,8 +17,25 @@ class WeatherBloc extends Bloc<WeatherEvent, WeatherState> {
   final LocalNotificationService _notificationService;
 
   /// Prevents rapid re-requests when switching screens with GPS off.
-  static DateTime? _lastGpsAttempt;
+  /// Instance-scoped (NOT static): the bloc is registered as a factory, and
+  /// a static cooldown leaked across instances — a freshly created bloc was
+  /// silently blocked from GPS by the previous instance's window.
+  DateTime? _lastGpsAttempt;
   static const Duration _gpsCooldown = Duration(seconds: 30);
+
+  /// Sri Lanka geographic centre (near Dambulla) — Island-wide fallback
+  /// when Local mode cannot resolve GPS but the user has no cached fix.
+  static const Location _islandWideFallback = Location(
+    id: 'island_wide',
+    name: 'Sri Lanka',
+    latitude: 7.8731,
+    longitude: 80.7718,
+  );
+
+  /// Monotonic id of the most recent fetch request. Results from older
+  /// in-flight requests are discarded so a speculative cached-location
+  /// fetch can never race (and overwrite) the fresher GPS fetch.
+  int _fetchGeneration = 0;
 
   WeatherBloc({
     required WeatherRepository weatherRepository,
@@ -26,7 +45,6 @@ class WeatherBloc extends Bloc<WeatherEvent, WeatherState> {
        super(WeatherInitial()) {
     on<LoadWeather>(_onLoadWeather);
     on<_FetchWeatherInBackground>(_onFetchWeatherInBackground);
-    on<_GpsFailed>(_onGpsFailed);
     on<RefreshWeather>(_onRefreshWeather);
     on<SearchLocations>(_onSearchLocations);
     on<SelectLocation>(_onSelectLocation);
@@ -36,41 +54,72 @@ class WeatherBloc extends Bloc<WeatherEvent, WeatherState> {
     LoadWeather event,
     Emitter<WeatherState> emit,
   ) async {
-    // Fixed location provided (e.g. Island-wide) — fetch fresh, no cache, no GPS
+    // Fixed location provided (e.g. Island-wide). Use the TTL cache unless the
+    // caller explicitly asked for a refresh — this is what makes an offline
+    // cold-start fall back to cached weather instead of hanging in Loading.
     if (event.location != null && !event.useGps) {
       emit(WeatherLoading());
-      add(_FetchWeatherInBackground(location: event.location!, forceRefresh: true));
+      add(_FetchWeatherInBackground(
+        location: event.location!,
+        forceRefresh: event.forceRefresh,
+        generation: ++_fetchGeneration,
+      ));
       return;
     }
 
     // GPS / Local mode
     emit(WeatherLoading());
     final cachedLocation = _weatherRepository.getCachedLocation();
-    if (cachedLocation != null) {
-      add(_FetchWeatherInBackground(location: cachedLocation, forceRefresh: true));
-    }
 
     // Cooldown: skip GPS if we tried within the last 30s to avoid
     // spamming the permission dialog on rapid tab switches.
     final now = DateTime.now();
     if (_lastGpsAttempt != null &&
         now.difference(_lastGpsAttempt!) < _gpsCooldown) {
-      if (cachedLocation == null) {
-        add(const _GpsFailed());
-      }
+      // Serve the last known fix instead of firing a second provider call
+      // this cycle; with no fix at all, degrade to the Island-wide frame.
+      add(_FetchWeatherInBackground(
+        location: cachedLocation ?? _islandWideFallback,
+        forceRefresh: false,
+        generation: ++_fetchGeneration,
+      ));
       return;
     }
     _lastGpsAttempt = now;
 
-    // Resolve real GPS in background and update
-    _weatherRepository.getLocationFromGps().then((gpsLocation) {
+    // Resolve real GPS in background and update exactly once. Guard against
+    // the future throwing (location service off, plugin crash) and against
+    // the bloc being closed (tab switch / back navigation) before it
+    // completes. There is deliberately NO speculative cached-location fetch
+    // running in parallel — it doubled every Local-mode provider call and
+    // raced the GPS result.
+    unawaited(_weatherRepository.getLocationFromGps().then((gpsLocation) {
+      if (isClosed) return;
       if (gpsLocation != null) {
         _weatherRepository.cacheLocation(gpsLocation);
-        add(_FetchWeatherInBackground(location: gpsLocation, forceRefresh: true));
-      } else if (cachedLocation == null) {
-        add(const _GpsFailed());
+        add(_FetchWeatherInBackground(
+          location: gpsLocation,
+          forceRefresh: event.forceRefresh,
+          generation: ++_fetchGeneration,
+        ));
+      } else {
+        // GPS unavailable: reuse the cached fix if we have one, otherwise
+        // degrade to Island-wide (NEVER lat/lon 0,0 — that is "Null
+        // Island" in the Gulf of Guinea).
+        add(_FetchWeatherInBackground(
+          location: cachedLocation ?? _islandWideFallback,
+          forceRefresh: event.forceRefresh,
+          generation: ++_fetchGeneration,
+        ));
       }
-    });
+    }).catchError((_) {
+      if (isClosed) return;
+      add(_FetchWeatherInBackground(
+        location: cachedLocation ?? _islandWideFallback,
+        forceRefresh: event.forceRefresh,
+        generation: ++_fetchGeneration,
+      ));
+    }));
   }
 
   Future<void> _onFetchWeatherInBackground(
@@ -85,6 +134,17 @@ class WeatherBloc extends Bloc<WeatherEvent, WeatherState> {
         if (gpsLocation != null) {
           location = gpsLocation;
           await _weatherRepository.cacheLocation(gpsLocation);
+        } else {
+          // Legacy placeholder with no resolvable GPS: never fetch weather
+          // for (0,0) and present it as the user's local conditions.
+          if (isClosed) return;
+          emit(
+            const WeatherError(
+              message: 'Location unavailable. Enable GPS or switch to '
+                  'Island-wide mode.',
+            ),
+          );
+          return;
         }
       }
 
@@ -93,6 +153,11 @@ class WeatherBloc extends Bloc<WeatherEvent, WeatherState> {
         longitude: location.longitude,
         forceRefresh: event.forceRefresh,
       );
+
+      if (isClosed) return;
+      // A newer request superseded this one (e.g. cached fix replaced by a
+      // fresh GPS fix mid-flight) — drop the stale result on the floor.
+      if (event.generation != _fetchGeneration) return;
 
       emit(
         WeatherLoaded(
@@ -107,6 +172,8 @@ class WeatherBloc extends Bloc<WeatherEvent, WeatherState> {
       // events as OS notifications (when notifications are enabled).
       _notifyTimelineEvents(weatherData, location);
     } catch (e) {
+      if (isClosed) return;
+      if (event.generation != _fetchGeneration) return;
       final currentState = state;
       if (currentState is WeatherLoaded) {
         emit(
@@ -116,20 +183,17 @@ class WeatherBloc extends Bloc<WeatherEvent, WeatherState> {
             isStaleCache: true,
           ),
         );
+      } else {
+        // Nothing to fall back to (cold start / first tab open). Surface a
+        // real error instead of leaving the UI stuck on WeatherLoading.
+        emit(
+          const WeatherError(
+            message:
+                'Could not load weather. Check your connection and try again.',
+          ),
+        );
       }
     }
-  }
-
-  Future<void> _onGpsFailed(
-    _GpsFailed event,
-    Emitter<WeatherState> emit,
-  ) async {
-    emit(
-      WeatherError(
-        message: 'Could not determine your location. '
-            'Enable location services or search for a location.',
-      ),
-    );
   }
 
   Future<void> _onRefreshWeather(
@@ -138,6 +202,7 @@ class WeatherBloc extends Bloc<WeatherEvent, WeatherState> {
   ) async {
     final currentState = state;
     if (currentState is WeatherLoaded && currentState.location != null) {
+      final generation = ++_fetchGeneration;
       try {
         final weatherData = await _weatherRepository.getWeatherData(
           latitude: currentState.location!.latitude,
@@ -145,6 +210,8 @@ class WeatherBloc extends Bloc<WeatherEvent, WeatherState> {
           forceRefresh: true,
         );
 
+        if (isClosed) return;
+        if (generation != _fetchGeneration) return;
         emit(
           WeatherLoaded(
             weatherData: weatherData,
@@ -157,6 +224,8 @@ class WeatherBloc extends Bloc<WeatherEvent, WeatherState> {
         // timeline events as OS notifications after a manual refresh.
         _notifyTimelineEvents(weatherData, currentState.location);
       } catch (e) {
+        if (isClosed) return;
+        if (generation != _fetchGeneration) return;
         emit(
           WeatherLoaded(
             weatherData: currentState.weatherData,

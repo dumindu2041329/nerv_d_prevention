@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -36,6 +37,7 @@ void main() async {
     };
 
     await dotenv.load(fileName: '.env');
+    _assertNoSecretsInEnv();
     await initDependencies();
 
     SystemChrome.setSystemUIOverlayStyle(
@@ -56,6 +58,35 @@ void main() async {
   }, (error, stack) {
     debugPrint('Uncaught zone error: $error\n$stack');
   });
+}
+
+/// Environment keys that must NEVER be bundled in the client `.env` asset.
+/// Provider keys (WeatherAPI / MapTiler / OWM) and the service-role key belong
+/// in Supabase Secrets and are only read server-side by the Edge Functions.
+const List<String> _forbiddenEnvKeys = <String>[
+  'WEATHERAPI_KEY',
+  'MAPTILER_API_KEY',
+  'OWM_API_KEY',
+  'SUPABASE_SERVICE_ROLE_KEY',
+  'SERVICE_ROLE_KEY',
+  'SUPABASE_SECRET_KEY',
+];
+
+/// Fails fast in release builds if a secret key has been added to `.env`.
+/// The `.env` file ships as a Flutter asset and is trivially extractable from
+/// an APK/IPA, so only public config (SUPABASE_URL + anon key) may live there.
+void _assertNoSecretsInEnv() {
+  if (!kReleaseMode) return;
+  final leaked = dotenv.env.keys
+      .where((k) => _forbiddenEnvKeys.contains(k.toUpperCase()))
+      .toList();
+  if (leaked.isNotEmpty) {
+    throw StateError(
+      'Release build must not bundle secret keys in .env: '
+      '${leaked.join(', ')}. Move them to Supabase Secrets '
+      '(supabase secrets set).',
+    );
+  }
 }
 
 class NERVApp extends StatelessWidget {

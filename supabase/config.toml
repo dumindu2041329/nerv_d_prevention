@@ -58,6 +58,16 @@ verify_jwt = false
 # flutter_map's TileLayer fetches plain images and cannot send an
 # Authorization header. Keys stay server-side via Supabase Secrets.
 
+[functions.weather]
+verify_jwt = true
+# Proxies the WeatherAPI.com key. The Flutter client always invokes it through
+# supabase.functions.invoke, which attaches the session/anon JWT — so enabling
+# verification blocks keyless callers from burning provider quota.
+
+[functions.geocode]
+verify_jwt = true
+# Proxies the MapTiler geocoding key. Same client invoke path as `weather`.
+
 [analytics]
 enabled = false
 # Privacy-first — no analytics tracking.

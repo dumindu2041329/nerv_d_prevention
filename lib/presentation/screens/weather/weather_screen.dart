@@ -8,6 +8,7 @@ import '../../../core/constants/weather_codes.dart';
 import '../../../core/utils/date_time_utils.dart';
 import '../../../core/utils/weather_alert_deriver.dart';
 import '../../../domain/entities/location.dart';
+import '../../../domain/entities/weather_data.dart';
 import '../../blocs/weather/weather_bloc.dart';
 import '../../widgets/nerv/nerv_styles.dart';
 import '../../widgets/nerv/posture_gauge.dart';
@@ -49,7 +50,12 @@ class _WeatherScreenState extends State<WeatherScreen> {
                   initialZoom: SLMapConstants.initialZoom,
                   minZoom: SLMapConstants.minZoom,
                   maxZoom: SLMapConstants.maxZoom,
-                  cameraConstraint: CameraConstraint.containLatitude(),
+                  cameraConstraint: CameraConstraint.contain(
+                    bounds: LatLngBounds(
+                      SLMapConstants.viewSouthWest,
+                      SLMapConstants.viewNorthEast,
+                    ),
+                  ),
                   interactionOptions: const InteractionOptions(
                     flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
                   ),
@@ -263,7 +269,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
     );
   }
 
-  Widget _buildConditionsGrid(BuildContext context, dynamic current) {
+  Widget _buildConditionsGrid(BuildContext context, CurrentWeather current) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
       child: Column(
@@ -357,7 +363,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
 
   // ── Hourly forecast strip ──────────────────────────────────────────
 
-  Widget _buildHourlySection(BuildContext context, dynamic hourly) {
+  Widget _buildHourlySection(BuildContext context, List<HourlyWeather> hourly) {
     final nerv = context.nerv;
     final onSurface = nerv.onSurface;
     return Padding(
@@ -369,7 +375,11 @@ class _WeatherScreenState extends State<WeatherScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Row(
               children: [
-                Eyebrow('HOURLY · 24H'),
+                // Derive the horizon from the actual data length so the
+                // label can never overstate what the mapper returned
+                // (WeatherAPI's free tier yields a rolling 24h / 5-day
+                // window — a hard-coded "24H"/"7-DAY" lied when shorter).
+                Eyebrow('HOURLY · ${hourly.length}H'.toUpperCase()),
                 const Spacer(),
                 Text(
                   'NOW',
@@ -405,7 +415,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
     );
   }
 
-  Widget _buildHourlyChip(BuildContext context, dynamic hour) {
+  Widget _buildHourlyChip(BuildContext context, HourlyWeather hour) {
     final nerv = context.nerv;
     final onSurface = nerv.onSurface;
     final accent = Theme.of(context).colorScheme.primary;
@@ -454,7 +464,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
 
   // ── Daily forecast ──────────────────────────────────────────────────
 
-  Widget _buildDailySection(BuildContext context, dynamic daily) {
+  Widget _buildDailySection(BuildContext context, List<DailyWeather> daily) {
     if (daily.isEmpty) return const SizedBox.shrink();
     final nerv = context.nerv;
 
@@ -467,7 +477,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Row(
               children: [
-                Eyebrow('7-DAY OUTLOOK'),
+                Eyebrow('${daily.length}-DAY OUTLOOK'),
                 const Spacer(),
                 Text(
                   'LOW / HIGH',
@@ -504,7 +514,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
 
   Widget _buildDailyLedgerRow(
     BuildContext context,
-    dynamic day,
+    DailyWeather day,
     int index, {
     required bool isLast,
   }) {

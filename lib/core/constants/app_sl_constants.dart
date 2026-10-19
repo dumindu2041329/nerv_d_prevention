@@ -27,6 +27,14 @@ class SLMapConstants {
 
   /// North-east bound of Sri Lanka
   static const LatLng northEast = LatLng(9.8167, 81.8167);
+
+  /// Operational map viewport — Sri Lanka plus a generous maritime margin.
+  /// Constraining the camera to this box (rather than the default ±90°
+  /// latitude) keeps users from panning into the void, preserves island
+  /// context, and bounds tile requests to a sane region (memory win on
+  /// low-end devices). Used by CameraConstraint.contain on every map.
+  static const LatLng viewSouthWest = LatLng(4.5, 78.5);
+  static const LatLng viewNorthEast = LatLng(11.0, 83.0);
 }
 
 // ──────────────────────────────────────────────────────────────────────

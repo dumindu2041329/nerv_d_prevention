@@ -17,7 +17,19 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 // const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY"); // optional email relay
 
-const SUPPORT_INBOX = "nervd.app2demo@gmail.com";
+const SUPPORT_INBOX = Deno.env.get("SUPPORT_INBOX") ?? "";
+
+// Salt for the abuse-throttle IP hash. Without a secret salt an attacker can
+// precompute the bucket for any spoofed IP; with one they cannot target or
+// collide buckets deterministically. Falls back to a fixed dev salt.
+const THROTTLE_SALT = Deno.env.get("CONTACT_THROTTLE_SALT") ?? "nerv-dev-salt";
+
+// Best-effort abuse throttle. In-memory per edge instance (a distributed
+// limiter such as Upstash is the production upgrade), but it now actually
+// enforces the "same IP can't submit twice within 60s" contract the previous
+// comment only promised. Keyed by hashed IP; pruned on read.
+const RATE_WINDOW_MS = 60_000;
+const lastSubmitByIp = new Map<string, number>();
 
 Deno.serve(async (req) => {
     if (req.method === "OPTIONS") {
@@ -59,10 +71,33 @@ Deno.serve(async (req) => {
         return json({ error: "Message must be 10–5000 chars" }, 400);
     }
 
-    // Simple abuse guard: hash the client IP. Same IP can't submit twice
-    // within 60 seconds. (Replace with a proper rate limiter for prod.)
-    const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "0.0.0.0";
-    const ipHash = await sha256(ip);
+    // Simple abuse guard: salt-hash the client IP and reject repeats within
+    // 60s. Use the RIGHT-MOST x-forwarded-for hop — the left-most element is
+    // fully client-controlled (XFF spoofing lets any caller pick its own
+    // bucket and skip the rule), whereas the right-most hop is appended by
+    // the platform's own proxy. A missing header means "no per-IP throttle"
+    // (fall back to the global limiter note) rather than sharing one bucket
+    // across every such client and locking them out.
+    const xff = req.headers.get("x-forwarded-for");
+    const ip = xff?.split(",").pop()?.trim() ?? "";
+    const ipHash = ip === ""
+        ? ""
+        : await sha256(`${THROTTLE_SALT}:${ip}`);
+
+    const nowMs = Date.now();
+    if (ipHash !== "") {
+        const last = lastSubmitByIp.get(ipHash) ?? 0;
+        if (nowMs - last < RATE_WINDOW_MS) {
+            return json({ error: "Please wait before submitting again" }, 429);
+        }
+        lastSubmitByIp.set(ipHash, nowMs);
+    }
+    // Keep the map bounded — drop stale entries opportunistically.
+    if (lastSubmitByIp.size > 10_000) {
+        for (const [k, t] of lastSubmitByIp) {
+            if (nowMs - t > RATE_WINDOW_MS) lastSubmitByIp.delete(k);
+        }
+    }
 
     const userAgent = req.headers.get("user-agent") ?? null;
 
@@ -74,7 +109,9 @@ Deno.serve(async (req) => {
         message,
         user_id: body.user_id ?? null,
         user_agent: userAgent,
-        ip_hash: ipHash,
+        // ip_hash may be empty when no client IP is available — store null
+        // rather than a constant hash shared by every header-less caller.
+        ip_hash: ipHash === "" ? null : ipHash,
     });
 
     if (error) {

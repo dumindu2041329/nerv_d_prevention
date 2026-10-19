@@ -83,6 +83,31 @@ foreach ($fn in $Functions) {
 
 Write-Host ""
 Write-Host "Secrets (required once):" -ForegroundColor Cyan
-Write-Host "  $cliCmd secrets set WEATHERAPI_KEY=... MAPTILER_API_KEY=... OWM_API_KEY=... --project-ref $ProjectRef"
-Write-Host "Done. Test with:" -ForegroundColor Cyan
-Write-Host "  Invoke-RestMethod -Uri 'https://$ProjectRef.supabase.co/functions/v1/alert-aggregator'"
+Write-Host "  $cliCmd secrets set WEATHERAPI_KEY=... MAPTILER_API_KEY=... OWM_API_KEY=... AGGREGATOR_CRON_SECRET=... --project-ref $ProjectRef"
+Write-Host "  (AGGREGATOR_CRON_SECRET must ALSO exist as a Vault secret named the same -"
+Write-Host "   the 20261020_alert_aggregator_cron_auth.sql migration wires pg_cron to send it"
+Write-Host "   as the Bearer token. Generate one with:"
+Write-Host "   node -e \"console.log(crypto.randomUUID().replace(/-/g,''))\")"
+
+# Smoke test: invoke the aggregator with the cron secret and assert 2xx.
+# A bare unauthenticated GET would now (correctly) return 403 — the same
+# 403 that silently killed the alert feed before the auth contract fix.
+if ($env:AGGREGATOR_CRON_SECRET) {
+    Write-Host "Smoke-testing alert-aggregator ..." -ForegroundColor Cyan
+    try {
+        $r = Invoke-RestMethod -Method Post `
+            -Uri "https://$ProjectRef.supabase.co/functions/v1/alert-aggregator" `
+            -Headers @{ Authorization = "Bearer $env:AGGREGATOR_CRON_SECRET" }
+        Write-Host "  OK: derived=$($r.derived) alerts=$($r.alerts)" -ForegroundColor Green
+    } catch {
+        Write-Host "  FAILED: alert-aggregator returned $($_.Exception.Response.StatusCode.value__)" -ForegroundColor Red
+        Write-Host "  Check AGGREGATOR_CRON_SECRET matches between Vault, function secrets and the cron job." -ForegroundColor Yellow
+    }
+
+    # Verify the scheduled job itself succeeds (catches header drift):
+    #   select status, return_code, message, start_time
+    #   from cron.job_run_details order by start_time desc limit 5;
+    Write-Host "After ~10 min, verify cron runs: select status, return_code from cron.job_run_details order by start_time desc limit 5;" -ForegroundColor Cyan
+} else {
+    Write-Host "Set `$env:AGGREGATOR_CRON_SECRET before running this script to enable the smoke test." -ForegroundColor Yellow
+}

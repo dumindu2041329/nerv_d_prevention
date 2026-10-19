@@ -27,8 +27,12 @@ class WeatherRepositoryImpl implements WeatherRepository {
     required double longitude,
     bool forceRefresh = false,
   }) async {
-    if (!forceRefresh && await isCacheValid()) {
-      final cached = await getCachedWeatherData();
+    if (!forceRefresh &&
+        await isCacheValid(latitude: latitude, longitude: longitude)) {
+      final cached = await getCachedWeatherData(
+        latitude: latitude,
+        longitude: longitude,
+      );
       if (cached != null) {
         return cached;
       }
@@ -39,7 +43,7 @@ class WeatherRepositoryImpl implements WeatherRepository {
       longitude: longitude,
     );
 
-    await cacheWeatherData(data);
+    await cacheWeatherData(data, latitude: latitude, longitude: longitude);
     return data;
   }
 
@@ -115,26 +119,40 @@ class WeatherRepositoryImpl implements WeatherRepository {
   // ── Cache (de)serialization with full hourly + daily support ─────────
 
   @override
-  Future<void> cacheWeatherData(WeatherData data) async {
-    await _hiveService.cacheWeatherData({
+  Future<void> cacheWeatherData(
+    WeatherData data, {
+    required double latitude,
+    required double longitude,
+  }) async {
+    await _hiveService.cacheWeatherData(HiveService.weatherCacheKey(
+      latitude,
+      longitude,
+    ), {
       'current': _serializeCurrent(data.current),
       'hourly': data.hourly.map(_serializeHourly).toList(),
       'daily': data.daily.map(_serializeDaily).toList(),
       'timezone': data.timezone,
+      'providerOffsetMinutes': data.providerOffset.inMinutes,
       'lastUpdated': data.lastUpdated.toIso8601String(),
     });
   }
 
   @override
-  Future<WeatherData?> getCachedWeatherData() async {
-    final data = _hiveService.getCachedWeatherData();
+  Future<WeatherData?> getCachedWeatherData({
+    required double latitude,
+    required double longitude,
+  }) async {
+    final data = _hiveService.getCachedWeatherData(
+      HiveService.weatherCacheKey(latitude, longitude),
+    );
     if (data == null) return null;
 
     try {
       final currentData = data['current'] as Map<String, dynamic>;
       final hourlyData = data['hourly'] as List?;
       final dailyData = data['daily'] as List?;
-      final timezone = (data['timezone'] as String?) ?? 'UTC';
+      final timezone = (data['timezone'] as String?) ?? 'Asia/Colombo';
+      final offsetMinutes = (data['providerOffsetMinutes'] as num?)?.toInt();
       final lastUpdated = DateTime.parse(data['lastUpdated'] as String);
 
       return WeatherData(
@@ -150,6 +168,11 @@ class WeatherRepositoryImpl implements WeatherRepository {
                 .toList() ??
             [],
         timezone: timezone,
+        // Pre-offset caches default to Sri Lanka (+05:30) — the only
+        // market this build ships to.
+        providerOffset: offsetMinutes != null
+            ? Duration(minutes: offsetMinutes)
+            : const Duration(hours: 5, minutes: 30),
         lastUpdated: lastUpdated,
       );
     } catch (e) {
@@ -206,7 +229,7 @@ class WeatherRepositoryImpl implements WeatherRepository {
         ),
         hourly: [],
         daily: [],
-        timezone: (data['timezone'] as String?) ?? 'UTC',
+        timezone: (data['timezone'] as String?) ?? 'Asia/Colombo',
         lastUpdated: DateTime.parse(data['lastUpdated'] as String),
       );
     } catch (e) {
@@ -215,8 +238,13 @@ class WeatherRepositoryImpl implements WeatherRepository {
   }
 
   @override
-  Future<bool> isCacheValid() async {
-    final timestamp = _hiveService.getCacheTimestamp();
+  Future<bool> isCacheValid({
+    required double latitude,
+    required double longitude,
+  }) async {
+    final timestamp = _hiveService.getCacheTimestamp(
+      HiveService.weatherCacheKey(latitude, longitude),
+    );
     if (timestamp == null) return false;
 
     final elapsed = DateTime.now().difference(timestamp);
@@ -247,6 +275,7 @@ class WeatherRepositoryImpl implements WeatherRepository {
     'surfacePressure': c.surfacePressure,
     'cloudCover': c.cloudCover,
     'uvIndex': c.uvIndex,
+    'isDay': c.isDay,
   };
 
   CurrentWeather _deserializeCurrent(Map<String, dynamic> m) => CurrentWeather(
@@ -261,6 +290,7 @@ class WeatherRepositoryImpl implements WeatherRepository {
     surfacePressure: (m['surfacePressure'] as num).toDouble(),
     cloudCover: (m['cloudCover'] as num).toDouble(),
     uvIndex: (m['uvIndex'] as num).toDouble(),
+    isDay: (m['isDay'] as bool?) ?? true,
   );
 
   Map<String, dynamic> _serializeHourly(HourlyWeather h) => {
@@ -301,7 +331,6 @@ class WeatherRepositoryImpl implements WeatherRepository {
     'sunrise': d.sunrise.toIso8601String(),
     'sunset': d.sunset.toIso8601String(),
     'uvIndexMax': d.uvIndexMax,
-    'shortwaveRadiationSum': d.shortwaveRadiationSum,
   };
 
   DailyWeather _deserializeDaily(Map<String, dynamic> m) => DailyWeather(
@@ -313,10 +342,11 @@ class WeatherRepositoryImpl implements WeatherRepository {
     precipitationProbabilityMax: (m['precipitationProbabilityMax'] as num)
         .toDouble(),
     windSpeedMax: (m['windSpeedMax'] as num).toDouble(),
-    windGustsMax: (m['windGustsMax'] as num).toDouble(),
+    // Nullable: absent in pre-gust cache entries → null (renders 'N/A'),
+    // never a fake 0.
+    windGustsMax: (m['windGustsMax'] as num?)?.toDouble(),
     sunrise: DateTime.parse(m['sunrise'] as String),
     sunset: DateTime.parse(m['sunset'] as String),
     uvIndexMax: (m['uvIndexMax'] as num).toDouble(),
-    shortwaveRadiationSum: (m['shortwaveRadiationSum'] as num).toDouble(),
   );
 }

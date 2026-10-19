@@ -23,7 +23,6 @@ dependencies:
   dio: ^5.7.0
   dio_cache_interceptor: ^3.5.0
   dio_cache_interceptor_hive_store: ^4.0.0
-  connectivity_plus: ^7.1.1
   flutter_dotenv: ^6.0.1
 
   hive_flutter: ^1.1.0

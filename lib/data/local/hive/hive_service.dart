@@ -85,26 +85,35 @@ class HiveService {
             : null,
       );
 
+  /// Builds a per-location cache key so Island-wide and Local weather never
+  /// overwrite each other. Coordinates are rounded to ~1 km (2 decimals) so
+  /// tiny GPS jitter still maps to the same bucket.
+  static String weatherCacheKey(double latitude, double longitude) {
+    final lat = latitude.toStringAsFixed(2);
+    final lon = longitude.toStringAsFixed(2);
+    return 'weather_data|$lat,$lon';
+  }
+
   /// Caches complete weather data including current, hourly, and daily
-  /// forecasts, plus a timestamp for staleness checks.
-  Future<void> cacheWeatherData(Map<String, dynamic> data) async {
-    await _weatherCacheBox.put('weather_data', data);
+  /// forecasts, plus a timestamp for staleness checks, keyed by location.
+  Future<void> cacheWeatherData(String key, Map<String, dynamic> data) async {
+    await _weatherCacheBox.put(key, data);
     await _weatherCacheBox.put(
-      'cache_timestamp',
+      '${key}_ts',
       DateTime.now().toIso8601String(),
     );
   }
 
-  Map<String, dynamic>? getCachedWeatherData() {
-    final data = _weatherCacheBox.get('weather_data');
+  Map<String, dynamic>? getCachedWeatherData(String key) {
+    final data = _weatherCacheBox.get(key);
     if (data == null) return null;
     return Map<String, dynamic>.from(data);
   }
 
-  DateTime? getCacheTimestamp() {
-    final timestamp = _weatherCacheBox.get('cache_timestamp');
+  DateTime? getCacheTimestamp(String key) {
+    final timestamp = _weatherCacheBox.get('${key}_ts');
     if (timestamp == null) return null;
-    return DateTime.parse(timestamp);
+    return DateTime.tryParse(timestamp.toString());
   }
 
   Future<void> clearWeatherCache() async {
@@ -114,16 +123,30 @@ class HiveService {
   Location? getCachedLocation() {
     final data = _weatherCacheBox.get('cached_location');
     if (data == null) return null;
-    final map = Map<String, dynamic>.from(data);
-    return Location(
-      id: map['id'] as String,
-      name: map['name'] as String,
-      country: map['country'] as String?,
-      admin1: map['admin1'] as String?,
-      latitude: (map['latitude'] as num).toDouble(),
-      longitude: (map['longitude'] as num).toDouble(),
-      isGps: map['isGps'] as bool? ?? false,
-    );
+    // Defensive read: older app builds wrote different shapes into this
+    // key, and the legacy-cache support contract says a corrupt/foreign
+    // entry must degrade to "no cached location" — never throw out of a
+    // BLoC event handler and wedge the state machine.
+    try {
+      final map = Map<String, dynamic>.from(data as Map);
+      final id = map['id'];
+      final name = map['name'];
+      final latitude = map['latitude'];
+      final longitude = map['longitude'];
+      if (id is! String || name is! String) return null;
+      if (latitude is! num || longitude is! num) return null;
+      return Location(
+        id: id,
+        name: name,
+        country: map['country'] is String ? map['country'] as String : null,
+        admin1: map['admin1'] is String ? map['admin1'] as String : null,
+        latitude: latitude.toDouble(),
+        longitude: longitude.toDouble(),
+        isGps: map['isGps'] is bool ? map['isGps'] as bool : false,
+      );
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<void> cacheLocation(Location location) async {

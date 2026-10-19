@@ -7,6 +7,7 @@ import '../../data/local/hive/hive_service.dart';
 import '../../domain/entities/alert.dart';
 import '../../domain/entities/timeline_event.dart';
 import '../constants/app_colors.dart';
+import '../router/app_router.dart';
 
 /// Wraps `flutter_local_notifications` to surface real OS-level
 /// notifications for high-severity disaster alerts.
@@ -39,6 +40,7 @@ class LocalNotificationService {
 
   // Settings-box keys.
   static const String _kNotificationsEnabledKey = 'notifications_enabled';
+  static const String _kCriticalAlertsEnabledKey = 'hazard_critical';
   static const String _kNotifiedIdsKey = 'notified_alert_ids';
   static const String _kNotifiedTimelineIdsKey = 'notified_timeline_ids';
   static const String _kNotifiedCurrentConditionIdsKey =
@@ -65,6 +67,25 @@ class LocalNotificationService {
   /// True if `init()` has completed successfully.
   bool _initialized = false;
 
+  /// Handle a user tapping a notification. Routes to the matching screen via
+  /// the app's GoRouter. Failures (e.g. tapped while signed out, before the
+  /// router shell is attached) are swallowed — the tap is best-effort.
+  void _onNotificationTapped(NotificationResponse response) {
+    final payload = response.payload ?? '';
+    try {
+      if (payload.startsWith('timeline:') ||
+          payload.startsWith('digest:')) {
+        AppRouter.router.push('/timeline');
+      } else if (payload == 'welcome' ||
+          // Any raw alert id (SOS) routes to Home where the feed lives.
+          payload.isNotEmpty) {
+        AppRouter.router.push('/home');
+      }
+    } catch (_) {
+      // Not navigable in the current app state — ignore.
+    }
+  }
+
   /// Configure platform-specific settings. Safe to call more than once.
   Future<void> init() async {
     if (_initialized) return;
@@ -83,7 +104,10 @@ class LocalNotificationService {
       iOS: iosSettings,
     );
 
-    await _plugin.initialize(settings: initSettings);
+    await _plugin.initialize(
+      settings: initSettings,
+      onDidReceiveNotificationResponse: _onNotificationTapped,
+    );
 
     // Pre-create the Android channels so first-alert delivery is instant.
     final androidImpl = _plugin.resolvePlatformSpecificImplementation<
@@ -206,6 +230,31 @@ class LocalNotificationService {
     return enabled ?? true;
   }
 
+  /// Hive key for a per-hazard notification toggle. Matches the keys
+  /// written by `SettingsBloc`/`SettingsRepositoryImpl` (`hazard_<type>`).
+  static String _hazardKeyFor(String alertType) => 'hazard_$alertType';
+
+  /// Whether the user has opted in to notifications for [alertType].
+  /// Missing keys default to enabled (opt-in is the shipped state).
+  ///
+  /// Contract with the Settings screen: Critical/Emergency alerts are
+  /// ALWAYS delivered regardless of per-hazard switches — those toggles
+  /// only mute Advisory/Warning/Info noise. That rule is enforced by the
+  /// callers (severity pre-check), not here.
+  Future<bool> _isHazardEnabled(String alertType) async {
+    final enabled =
+        await _hiveService.getSetting<bool>(_hazardKeyFor(alertType));
+    return enabled ?? true;
+  }
+
+  /// The `hazard_critical` master switch: gates non-life-threatening
+  /// (Warning and below) notifications of every hazard type.
+  Future<bool> _areNonLifeThreateningEnabled() async {
+    final enabled =
+        await _hiveService.getSetting<bool>(_kCriticalAlertsEnabledKey);
+    return enabled ?? true;
+  }
+
   /// Public entry point invoked by [AlertBloc] after every fetch.
   ///
   /// Surfaces a system notification for each Critical/Emergency alert
@@ -227,10 +276,17 @@ class LocalNotificationService {
       // Notify for Critical, Emergency, and Warning SOS alerts. Warning
       // is included so users in genuinely bad conditions see something
       // on their device even when no top-tier alert exists.
-      if (alert.severity != SeverityLevel.critical &&
-          alert.severity != SeverityLevel.emergency &&
-          alert.severity != SeverityLevel.warning) {
+      final isLifeThreatening = alert.severity == SeverityLevel.critical ||
+          alert.severity == SeverityLevel.emergency;
+      if (!isLifeThreatening && alert.severity != SeverityLevel.warning) {
         continue;
+      }
+      // Per-hazard opt-outs (Settings screen). Critical/Emergency are
+      // never muted — the switches only control lower-tier noise, matching
+      // the "Emergency Warnings always delivered" promise in the UI.
+      if (!isLifeThreatening) {
+        if (!await _areNonLifeThreateningEnabled()) continue;
+        if (!await _isHazardEnabled(alert.type)) continue;
       }
       if (alreadyNotified.contains(alert.id)) continue;
 
@@ -305,10 +361,25 @@ class LocalNotificationService {
     final newlyNotified = <String>{};
     for (final event in sorted) {
       if (event.isLifted) continue;
-      if (!event.time.isAfter(now)) continue;
+      // Current-condition events are stamped with derivation time, so by
+      // the time this runs they are a few seconds "in the past" — a strict
+      // isAfter(now) check silently dropped every present-tense hazard
+      // (thunderstorm now, dense fog now). Allow a 1-hour look-back window;
+      // the content-hash dedup key keeps repeats out.
+      if (event.time.isBefore(now.subtract(const Duration(hours: 1)))) {
+        continue;
+      }
       // Notify for any non-Calm timeline event so users see a real
       // device notification whenever the weather has something to say.
       if (event.severity == SeverityLevel.calm) continue;
+      // Honour the Settings-screen per-hazard opt-outs. Critical/Emergency
+      // bypass the switches (life-safety lifeline).
+      final isLifeThreatening = event.severity == SeverityLevel.critical ||
+          event.severity == SeverityLevel.emergency;
+      if (!isLifeThreatening) {
+        if (!await _areNonLifeThreateningEnabled()) continue;
+        if (!await _isHazardEnabled(event.type)) continue;
+      }
 
       final dedupKey = _timelineDedupKey(event);
       if (alreadyNotified.contains(dedupKey)) continue;
@@ -380,9 +451,12 @@ class LocalNotificationService {
   /// Hash a timeline event into a stable notification ID.
   /// `0` and low positive ints collide with the SOS channel — add an
   /// offset so timeline notifications get a distinct numeric space.
+  /// Mask with 0x3FFFFFFF (not 0x7FFFFFFF) so offset + hash can never
+  /// exceed Int32 max — a 64-bit Dart int that overflows truncates to a
+  /// NEGATIVE Android notification id, breaking replace-existing dedup.
   int _timelineNotificationId(TimelineEvent event) {
     final raw = _timelineDedupKey(event).hashCode;
-    return (raw & 0x7FFFFFFF) + 1000000;
+    return (raw & 0x3FFFFFFF) + 1000000;
   }
 
   String _formatTimelineTime(DateTime t) {
@@ -523,7 +597,9 @@ class LocalNotificationService {
     );
 
     await _plugin.show(
-      id: alert.id.hashCode,
+      // Strings hash negative for roughly half the space; Android treats
+      // negative ids inconsistently across OEM launchers — clamp positive.
+      id: alert.id.hashCode & 0x3FFFFFFF,
       title: alert.headline,
       body: body,
       notificationDetails: details,

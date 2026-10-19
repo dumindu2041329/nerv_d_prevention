@@ -13,7 +13,7 @@ import '../../../domain/entities/location.dart';
 import '../../blocs/alerts/alert_bloc.dart';
 import '../../blocs/weather/weather_bloc.dart';
 import '../../widgets/national_local_toggle.dart';
-import '../../widgets/sos_alert_banner.dart';
+import '../../widgets/alert_banner.dart';
 import '../../widgets/stale_data_banner.dart';
 import '../../widgets/nerv/nerv_styles.dart';
 import '../../widgets/nerv/posture_gauge.dart';
@@ -57,12 +57,10 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
       DraggableScrollableController();
   LatLng? _gpsLocation;
 
-  static const _colombo = LatLng(6.9271, 79.8612);
-
   void _onToggleChanged(bool isNational) {
     setState(() => _isIslandWide = isNational);
     if (isNational) {
-      _mapController.move(_colombo, SLMapConstants.initialZoom);
+      _mapController.move(SLMapConstants.center, SLMapConstants.initialZoom);
       context.read<WeatherBloc>().add(
         LoadWeather(
           location: const Location(
@@ -75,7 +73,7 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
         ),
       );
     } else {
-      _mapController.move(_gpsLocation ?? _colombo, 12.0);
+      _mapController.move(_gpsLocation ?? SLMapConstants.center, 12.0);
       context.read<WeatherBloc>().add(const LoadWeather(useGps: true));
     }
   }
@@ -116,9 +114,7 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
               snap: true,
               snapSizes: const [0.25, 0.45, 0.85],
               controller: _sheetController,
-              builder: (context, scrollController) {
-                return _buildWeatherAlertSheet(context, scrollController);
-              },
+              builder: _buildWeatherAlertSheet,
             ),
           ],
         ),
@@ -246,7 +242,12 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
         initialZoom: _isIslandWide ? SLMapConstants.initialZoom : 12.0,
         minZoom: SLMapConstants.minZoom,
         maxZoom: SLMapConstants.maxZoom,
-        cameraConstraint: CameraConstraint.containLatitude(),
+        cameraConstraint: CameraConstraint.contain(
+          bounds: LatLngBounds(
+            SLMapConstants.viewSouthWest,
+            SLMapConstants.viewNorthEast,
+          ),
+        ),
         interactionOptions: const InteractionOptions(
           flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
         ),
@@ -371,10 +372,13 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
       backgroundColor: theme.colorScheme.surface,
       onRefresh: () async {
         context.read<WeatherBloc>().add(const RefreshWeather());
-        context.read<AlertBloc>().add(const RefreshAlerts());
-        await context.read<AlertBloc>().stream.firstWhere(
-          (s) => s is AlertLoaded || s is AlertError,
-        );
+        final alertBloc = context.read<AlertBloc>();
+        alertBloc.add(const RefreshAlerts());
+        // Bounded wait: never leave the spinner up forever if the alert
+        // stream doesn't emit a terminal state (network stall).
+        await alertBloc.stream
+            .firstWhere((s) => s is AlertLoaded || s is AlertError)
+            .timeout(const Duration(seconds: 15), onTimeout: () => alertBloc.state);
       },
       child: ListView(
         controller: scrollController,
@@ -466,9 +470,7 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
                           ),
                         ),
                       ),
-                    ...alertState.alerts.map(
-                      (a) => SosAlertBanner(alert: a),
-                    ),
+                    ...alertBannerWidgets(alertState.alerts),
                     const SizedBox(height: 12),
                   ],
                 );

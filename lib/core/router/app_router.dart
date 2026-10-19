@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import '../../data/local/hive/hive_service.dart';
 import '../../core/di/injection.dart';
 import '../../domain/entities/timeline_event.dart';
+import '../../domain/entities/location.dart';
 import '../../presentation/screens/home/home_screen.dart';
 import '../../presentation/screens/map/map_screen.dart';
 import '../../presentation/screens/timeline/timeline_screen.dart';
@@ -92,7 +93,11 @@ class AppRouter {
       GoRoute(
         path: '/weather-detail',
         parentNavigatorKey: _rootNavigatorKey,
-        builder: (context, state) => const WeatherDetailScreen(),
+        builder: (context, state) => WeatherDetailScreen(
+          initialLocation: state.extra is Location
+              ? state.extra as Location
+              : null,
+        ),
       ),
       GoRoute(
         path: '/contact-us',
@@ -108,8 +113,22 @@ class AppRouter {
         path: '/timeline-event-detail',
         parentNavigatorKey: _rootNavigatorKey,
         builder: (context, state) {
-          final event = state.extra as TimelineEvent;
-          return TimelineEventDetailScreen(event: event);
+          final extra = state.extra;
+          // Cold-start deep links / browser back / a caller that forgot to
+          // pass `extra` must not crash the app on navigation.
+          if (extra is! TimelineEvent) {
+            return Scaffold(
+              body: SafeArea(
+                child: Center(
+                  child: TextButton(
+                    onPressed: () => context.pop(),
+                    child: const Text('Event unavailable — go back'),
+                  ),
+                ),
+              ),
+            );
+          }
+          return TimelineEventDetailScreen(event: extra);
         },
       ),
     ],

@@ -8,6 +8,11 @@ class SettingsState extends Equatable {
   final TextSizeScale textSizeScale;
   final FontWeightScale fontWeightScale;
   final bool notificationsEnabled;
+
+  /// Per-hazard notification opt-outs keyed by SLAlertType.name plus the
+  /// 'critical' master switch. Missing keys are treated as enabled.
+  /// Critical/Emergency deliveries ignore these switches by design.
+  final Map<String, bool> hazardNotifications;
   final bool isLoaded;
 
   const SettingsState({
@@ -18,8 +23,12 @@ class SettingsState extends Equatable {
     this.textSizeScale = TextSizeScale.normal,
     this.fontWeightScale = FontWeightScale.normal,
     this.notificationsEnabled = true,
+    this.hazardNotifications = const {},
     this.isLoaded = false,
   });
+
+  /// Read a hazard toggle with the shipped default (enabled) when unset.
+  bool isHazardEnabled(String key) => hazardNotifications[key] ?? true;
 
   @override
   List<Object?> get props => [
@@ -30,6 +39,7 @@ class SettingsState extends Equatable {
     textSizeScale,
     fontWeightScale,
     notificationsEnabled,
+    hazardNotifications,
     isLoaded,
   ];
 
@@ -41,6 +51,7 @@ class SettingsState extends Equatable {
     TextSizeScale? textSizeScale,
     FontWeightScale? fontWeightScale,
     bool? notificationsEnabled,
+    Map<String, bool>? hazardNotifications,
     bool? isLoaded,
   }) {
     return SettingsState(
@@ -51,6 +62,7 @@ class SettingsState extends Equatable {
       textSizeScale: textSizeScale ?? this.textSizeScale,
       fontWeightScale: fontWeightScale ?? this.fontWeightScale,
       notificationsEnabled: notificationsEnabled ?? this.notificationsEnabled,
+      hazardNotifications: hazardNotifications ?? this.hazardNotifications,
       isLoaded: isLoaded ?? this.isLoaded,
     );
   }

@@ -20,6 +20,7 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     on<LoadSettings>(_onLoadSettings);
     on<ToggleDarkMode>(_onToggleDarkMode);
     on<ToggleNotifications>(_onToggleNotifications);
+    on<ToggleHazardNotifications>(_onToggleHazardNotifications);
     on<SetLanguage>(_onSetLanguage);
     on<SetColourVisionMode>(_onSetColourVisionMode);
     on<SetContrastMode>(_onSetContrastMode);
@@ -40,6 +41,22 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     final notificationsEnabled =
         await _settingsRepository.isNotificationsEnabled();
 
+    // Per-hazard notification switches: SLAlertType names + the 'critical'
+    // master switch (mirrors the Settings screen rows).
+    const hazardKeys = [
+      'critical',
+      'flood',
+      'landslide',
+      'cyclone',
+      'lightning',
+      'coastalWarning',
+      'tsunami',
+    ];
+    final hazardNotifications = <String, bool>{
+      for (final key in hazardKeys)
+        key: await _settingsRepository.isHazardEnabled(key),
+    };
+
     emit(
       SettingsState(
         isDarkMode: isDarkMode,
@@ -49,6 +66,7 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
         textSizeScale: textSizeScale,
         fontWeightScale: fontWeightScale,
         notificationsEnabled: notificationsEnabled,
+        hazardNotifications: hazardNotifications,
         isLoaded: true,
       ),
     );
@@ -68,25 +86,43 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     Emitter<SettingsState> emit,
   ) async {
     final newValue = !state.notificationsEnabled;
-    await _settingsRepository.setNotificationsEnabled(newValue);
 
-    // When the user turns notifications on, ask the OS for permission
-    // so future Critical/Emergency alerts can actually surface on the
-    // device. Failures are non-fatal — the in-app toggle stays on and
-    // the next settings refresh can retry.
-    if (newValue) {
-      try {
-        await _notificationService.requestPermissions();
-        // Fire a real on-device confirmation toast so the user can
-        // verify the notification pipeline is actually wired up.
-        await _notificationService.showWelcomeNotification();
-      } catch (_) {
-        // Permission denial shouldn't crash the bloc; the in-app
-        // toggle reflects the user's intent regardless of OS state.
-      }
+    if (!newValue) {
+      // Turning off never requires OS permission — persist immediately.
+      await _settingsRepository.setNotificationsEnabled(false);
+      emit(state.copyWith(notificationsEnabled: false));
+      return;
     }
 
-    emit(state.copyWith(notificationsEnabled: newValue));
+    // Turning on requires the OS to actually grant permission. If the user
+    // denies the dialog we must NOT persist an enabled flag the device will
+    // silently ignore (every future _plugin.show() would be dropped).
+    var granted = false;
+    try {
+      granted = await _notificationService.requestPermissions();
+      if (granted) {
+        await _notificationService.showWelcomeNotification();
+      }
+    } catch (_) {
+      granted = false;
+    }
+
+    if (!granted) return; // leave the toggle reflecting reality (off)
+    await _settingsRepository.setNotificationsEnabled(true);
+    emit(state.copyWith(notificationsEnabled: true));
+  }
+
+  Future<void> _onToggleHazardNotifications(
+    ToggleHazardNotifications event,
+    Emitter<SettingsState> emit,
+  ) async {
+    await _settingsRepository.setHazardEnabled(event.key, event.enabled);
+    emit(state.copyWith(
+      hazardNotifications: {
+        ...state.hazardNotifications,
+        event.key: event.enabled,
+      },
+    ));
   }
 
   Future<void> _onSetLanguage(

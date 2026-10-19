@@ -5,6 +5,12 @@ class WeatherData extends Equatable {
   final List<HourlyWeather> hourly;
   final List<DailyWeather> daily;
   final String timezone;
+
+  /// UTC offset of the loaded location at snapshot time (from the
+  /// provider's `utcoffset` field). All parsed timestamps in this entity
+  /// are provider-local wall-clock times; anything comparing them against
+  /// "now" must convert via this offset (see WeatherAlertDeriver).
+  final Duration providerOffset;
   final DateTime lastUpdated;
 
   const WeatherData({
@@ -12,11 +18,19 @@ class WeatherData extends Equatable {
     required this.hourly,
     required this.daily,
     required this.timezone,
+    this.providerOffset = const Duration(hours: 5, minutes: 30),
     required this.lastUpdated,
   });
 
   @override
-  List<Object?> get props => [current, hourly, daily, timezone, lastUpdated];
+  List<Object?> get props => [
+        current,
+        hourly,
+        daily,
+        timezone,
+        providerOffset,
+        lastUpdated,
+      ];
 }
 
 class CurrentWeather extends Equatable {
@@ -113,11 +127,14 @@ class DailyWeather extends Equatable {
   final double precipitationSum;
   final double precipitationProbabilityMax;
   final double windSpeedMax;
-  final double windGustsMax;
+
+  /// Peak daily gust (km/h). Nullable — older Hive cache entries and
+  /// providers without gust data store null, and downstream copy must
+  /// degrade to 'N/A' rather than reporting "0 km/h".
+  final double? windGustsMax;
   final DateTime sunrise;
   final DateTime sunset;
   final double uvIndexMax;
-  final double shortwaveRadiationSum;
 
   const DailyWeather({
     required this.time,
@@ -127,11 +144,10 @@ class DailyWeather extends Equatable {
     required this.precipitationSum,
     required this.precipitationProbabilityMax,
     required this.windSpeedMax,
-    required this.windGustsMax,
+    this.windGustsMax,
     required this.sunrise,
     required this.sunset,
     required this.uvIndexMax,
-    required this.shortwaveRadiationSum,
   });
 
   @override
@@ -147,6 +163,5 @@ class DailyWeather extends Equatable {
         sunrise,
         sunset,
         uvIndexMax,
-        shortwaveRadiationSum,
       ];
 }

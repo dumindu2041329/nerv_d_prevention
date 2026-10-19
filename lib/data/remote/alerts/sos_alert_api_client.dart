@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../domain/entities/alert.dart';
@@ -6,42 +8,54 @@ import '../../../domain/entities/alert.dart';
 ///
 /// Alerts are aggregated server-side by the `alert-aggregator` Edge Function
 /// (Open-Meteo thresholds + GDACS cyclone/tsunami RSS, using the API keys
-/// stored in Supabase Secrets) and persisted into the `public.alerts` table.
-/// This client reads that table — it is the single source of truth for all
-/// screens (Home, Timeline). The old direct-to-GDACS GeoJSON call was retired
-/// because `gdacs.org/gdacsapi/api/events/geojson` now returns 404.
+/// stored in Supabase Secrets) and persisted to Supabase Storage as the
+/// `alerts.json` object in the `table-exports` bucket (the old `public.alerts`
+/// table was removed). This client reads that object — it is the single source
+/// of truth for all screens (Home, Timeline). The old direct-to-GDACS GeoJSON
+/// call was retired because `gdacs.org/gdacsapi/api/events/geojson` returns 404.
 ///
-/// `public.alerts` has an open SELECT RLS policy, so the anon key can read it
-/// without a signed-in session.
+/// The `table-exports` bucket has an open object SELECT policy, so the anon key
+/// can download `alerts.json` without a signed-in session.
 class SosAlertApiClient {
   final SupabaseClient _client;
 
   SosAlertApiClient({SupabaseClient? client})
       : _client = client ?? Supabase.instance.client;
 
-  /// Returns currently-active alerts (most severe first is handled by the
-  /// bloc). Empty list on any error — the repository falls back to cache /
-  /// offline demo so the UI never blocks on an upstream outage.
-  Future<List<Alert>> fetchSriLankaAlerts() async {
-    try {
-      final rows = await _client
-          .from('alerts')
-          .select()
-          .order('issued_at', ascending: false)
-          .limit(100);
+  /// Supabase Storage location written by the `alert-aggregator` function.
+  static const String _bucket = 'table-exports';
+  static const String _alertsObject = 'alerts.json';
 
-      final now = DateTime.now().toUtc();
-      final alerts = (rows as List)
-          .cast<Map<String, dynamic>>()
-          .map(_rowToAlert)
-          .whereType<Alert>()
-          // Drop rows whose expiry has already passed.
-          .where((a) => a.expiryTime == null || a.expiryTime!.isAfter(now))
-          .toList();
-      return alerts;
-    } catch (_) {
-      return const [];
+  /// Returns currently-active alerts (most severe first). Throws on any
+  /// transport/parse failure so the repository can tell "no alerts" (a valid
+  /// empty feed) apart from "fetch failed" and keep serving the cache.
+  Future<List<Alert>> fetchSriLankaAlerts() async {
+    final bytes = await _client.storage.from(_bucket).download(_alertsObject);
+    final decoded = jsonDecode(utf8.decode(bytes));
+    if (decoded is! List) {
+      throw const FormatException('alerts.json is not a JSON array');
     }
+
+    final now = DateTime.now().toUtc();
+    final alerts = <Alert>[];
+    for (final row in decoded) {
+      final alert = _rowToAlert(row as Map<String, dynamic>);
+      if (alert == null) continue;
+      // Drop rows whose expiry has already passed.
+      if (alert.expiryTime != null && !alert.expiryTime!.isAfter(now)) {
+        continue;
+      }
+      alerts.add(alert);
+    }
+    // Rank by severity first, then recency, so the 100-row cap keeps the
+    // most important alerts rather than simply the 100 most recent — an
+    // older Critical must never be truncated in favour of newer Info rows.
+    alerts.sort((a, b) {
+      final bySeverity = a.severity.index.compareTo(b.severity.index);
+      if (bySeverity != 0) return bySeverity;
+      return b.issuedTime.compareTo(a.issuedTime);
+    });
+    return alerts.take(100).toList();
   }
 
   /// Map an `alerts` row to the in-app [Alert] entity. The severity column

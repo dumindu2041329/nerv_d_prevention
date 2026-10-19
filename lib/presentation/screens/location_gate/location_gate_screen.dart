@@ -50,7 +50,34 @@ class _LocationGateScreenState extends State<LocationGateScreen>
   Future<void> _handleEnable() async {
     setState(() => _processing = true);
 
-    await Geolocator.requestPermission();
+    // Respect the permission result instead of blindly proceeding. This gate
+    // is the entry path for the whole Local mode, so a denial here otherwise
+    // funnels into the bloc's "no GPS" branch. A soft gate still lets the
+    // user continue to Island-wide mode — we only guide, never hard-block.
+    final permission = await Geolocator.requestPermission();
+    if (!mounted) return;
+
+    if (permission == LocationPermission.deniedForever) {
+      final opened = await Geolocator.openAppSettings();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: const Color(0xFF1A1A1A),
+          content: Text(
+            opened
+                ? 'Location permission is off. Grant it in app settings, or '
+                    'continue in Island-wide mode.'
+                : 'Location permission denied. You can change it later, or '
+                    'use Island-wide mode.',
+            style: GoogleFonts.inter(fontSize: 13, color: const Color(0xFFF0F2F8)),
+          ),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+      );
+      setState(() => _processing = false);
+      return;
+    }
 
     final serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!mounted) return;

@@ -2,6 +2,35 @@ import 'package:flutter/material.dart';
 import '../../core/constants/constants.dart';
 import '../../domain/entities/alert.dart';
 import '../../core/utils/date_time_utils.dart';
+import 'sos_alert_banner.dart';
+
+/// Splits [alerts] into the correct banner chrome: the pulsing SOS
+/// treatment is reserved for Critical/Emergency (its documented
+/// contract), everything else renders through the calm AlertBanner.
+/// Sorted most-severe-first within each tier.
+List<Widget> alertBannerWidgets(List<Alert> alerts) {
+  int bySeverity(Alert a, Alert b) => a.severity.index.compareTo(b.severity.index);
+  final sos = alerts
+      .where(
+        (a) =>
+            a.severity == SeverityLevel.critical ||
+            a.severity == SeverityLevel.emergency,
+      )
+      .toList()
+    ..sort(bySeverity);
+  final other = alerts
+      .where(
+        (a) =>
+            a.severity != SeverityLevel.critical &&
+            a.severity != SeverityLevel.emergency,
+      )
+      .toList()
+    ..sort(bySeverity);
+  return <Widget>[
+    ...sos.map((a) => SosAlertBanner(alert: a)),
+    ...other.map((a) => AlertBanner(alert: a)),
+  ];
+}
 
 class AlertBanner extends StatelessWidget {
   final Alert alert;
@@ -109,21 +138,21 @@ class AlertBanner extends StatelessWidget {
 
   IconData _getIconForAlertType(String type) {
     switch (type.toLowerCase()) {
-      case 'earthquake':
-        return Icons.vibration;
-      case 'tsunami':
-        return Icons.waves;
-      case 'volcano':
-        return Icons.local_fire_department;
-      case 'rain':
       case 'flood':
         return Icons.water_drop;
-      case 'wind':
-        return Icons.air;
-      case 'storm':
-        return Icons.thunderstorm;
-      case 'j-alert':
-        return Icons.campaign;
+      case 'landslide':
+        return Icons.terrain;
+      case 'cyclone':
+        return Icons.storm;
+      case 'lightning':
+        return Icons.bolt;
+      case 'coastalwarning':
+      case 'coastal':
+        return Icons.waves;
+      case 'tsunami':
+        return Icons.tsunami;
+      case 'earthquake':
+        return Icons.vibration;
       default:
         return Icons.warning;
     }
