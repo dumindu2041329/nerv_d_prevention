@@ -8,7 +8,8 @@
 //           SUPABASE_SERVICE_ROLE_KEY. Do NOT call from the Flutter
 //           client directly.
 // Sources:  Open-Meteo (forecast) + GDACS RSS.
-// Output:   upserts into public.alerts + public.timeline_events.
+// Output:   merges JSON into Supabase Storage bucket `table-exports`
+//           (objects: alerts.json, timeline_events.json). No DB tables.
 //
 // Deploy:
 //   supabase functions deploy alert-aggregator \
@@ -358,18 +359,75 @@ async function deriveFromGdacs(): Promise<DerivedAlert[]> {
   return out;
 }
 
-// ── Step 4: upsert into public.alerts + mirror to timeline_events
+// ── Step 4: merge into Supabase Storage (`table-exports` bucket) ──
+// Replaces the old table upserts. Maintains two JSON objects — alerts.json and
+// timeline_events.json — applying the same idempotent upsert-by-id semantics
+// the DB had, then pruning expired alerts and trimming the timeline to a
+// rolling window before writing back. The service-role client bypasses RLS.
+type Supa = ReturnType<typeof client>;
+
+const STORAGE_BUCKET = "table-exports";
+const ALERTS_PATH = "alerts.json";
+const TIMELINE_PATH = "timeline_events.json";
+const TIMELINE_RETENTION_HOURS = 72;
+
+type StoredRow = Record<string, unknown> & {
+  id: string;
+  created_at?: string;
+};
+
+async function readStored(supa: Supa, path: string): Promise<StoredRow[]> {
+  const { data, error } = await supa.storage
+    .from(STORAGE_BUCKET)
+    .download(path);
+  // Missing object / download failure is treated as an empty store.
+  if (error || !data) return [];
+  try {
+    const parsed: unknown = JSON.parse(await data.text());
+    return Array.isArray(parsed) ? (parsed as StoredRow[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+// Incoming rows win on conflict but inherit created_at from any prior copy,
+// so re-aggregating an existing alert id does not reset its original timestamp.
+function mergeById(existing: StoredRow[], incoming: StoredRow[]): StoredRow[] {
+  const byId = new Map<string, StoredRow>();
+  for (const e of existing) byId.set(e.id, e);
+  for (const e of incoming) {
+    const prev = byId.get(e.id);
+    byId.set(e.id, prev?.created_at ? { ...e, created_at: prev.created_at } : e);
+  }
+  return [...byId.values()];
+}
+
+async function writeJson(supa: Supa, path: string, rows: StoredRow[]) {
+  const { error } = await supa.storage
+    .from(STORAGE_BUCKET)
+    .upload(path, JSON.stringify(rows), {
+      contentType: "application/json",
+      upsert: true,
+      cacheControl: "30",
+    });
+  if (error) {
+    console.error(`storage.upload(${path}) error`, error);
+    throw error;
+  }
+}
+
 async function persist(alerts: DerivedAlert[]) {
-  if (alerts.length === 0) return { upserted: 0, events: 0 };
   const supa = client();
-  const now = new Date().toISOString();
-  const rows = alerts.map((a) => ({
+  const nowIso = new Date().toISOString();
+  const nowMs = Date.now();
+
+  const incomingAlerts: StoredRow[] = alerts.map((a) => ({
     id: a.id,
     type: a.type,
     headline: a.headline,
     description: a.description,
     severity: a.severity,
-    issued_at: now,
+    issued_at: nowIso,
     expiry_at: a.expires_at,
     location: a.district,
     district: a.district,
@@ -377,16 +435,11 @@ async function persist(alerts: DerivedAlert[]) {
     longitude: a.longitude,
     source: a.source,
     metadata: a.metadata,
+    created_at: nowIso,
+    updated_at: nowIso,
   }));
-  const { error } = await supa
-    .from("alerts")
-    .upsert(rows, { onConflict: "id" });
-  if (error) {
-    console.error("alerts.upsert error", error);
-    throw error;
-  }
 
-  const events = rows.map((r) => ({
+  const incomingEvents: StoredRow[] = incomingAlerts.map((r) => ({
     id: `${r.id}-timeline`,
     alert_id: r.id,
     title: r.headline,
@@ -399,15 +452,32 @@ async function persist(alerts: DerivedAlert[]) {
     longitude: r.longitude,
     location: r.district,
     metadata: r.metadata,
+    created_at: r.created_at,
   }));
-  const { error: tErr } = await supa
-    .from("timeline_events")
-    .upsert(events, { onConflict: "id" });
-  if (tErr) {
-    console.error("timeline_events.upsert error", tErr);
-    throw tErr;
-  }
-  return { upserted: rows.length, events: events.length };
+
+  const [existingAlerts, existingEvents] = await Promise.all([
+    readStored(supa, ALERTS_PATH),
+    readStored(supa, TIMELINE_PATH),
+  ]);
+
+  // Prune expired alerts (parity with the retired expire_stale_alerts RPC).
+  const liveAlerts = mergeById(existingAlerts, incomingAlerts).filter(
+    (a) => !a.expiry_at || Date.parse(String(a.expiry_at)) > nowMs,
+  );
+  // Keep a bounded rolling timeline window (parity with get_timeline_events).
+  const cutoff = nowMs - TIMELINE_RETENTION_HOURS * 60 * 60 * 1000;
+  const liveEvents = mergeById(existingEvents, incomingEvents).filter(
+    (e) => Date.parse(String(e.occurred_at)) >= cutoff,
+  );
+
+  await writeJson(supa, ALERTS_PATH, liveAlerts);
+  await writeJson(supa, TIMELINE_PATH, liveEvents);
+
+  return {
+    alerts: liveAlerts.length,
+    events: liveEvents.length,
+    written: incomingAlerts.length,
+  };
 }
 
 // ── HTTP handler ──────────────────────────────────────────────────
